@@ -126,22 +126,24 @@ RTCScene initializeScene(RTCDevice device)
                                                      0,
                                                      RTC_FORMAT_FLOAT3,
                                                      3*sizeof(float),
-                                                     3);
+                                                     4);
 
   unsigned* indices = (unsigned*) rtcSetNewGeometryBuffer(geom,
                                                           RTC_BUFFER_TYPE_INDEX,
                                                           0,
                                                           RTC_FORMAT_UINT3,
                                                           3*sizeof(unsigned),
-                                                          1);
+                                                          2);
 
   if (vertices && indices)
   {
     vertices[0] = -10.f; vertices[1] = -2.f; vertices[2] = -10.f;
     vertices[3] = -10.f; vertices[4] = -2.f; vertices[5] = +10.f;
     vertices[6] = +10.f; vertices[7] = -2.f; vertices[8] = -10.f;
+    vertices[9] = +10.f; vertices[10] = -2.f; vertices[11] = 10.f;
 
     indices[0] = 0; indices[1] = 1; indices[2] = 2;
+    indices[3] = 1; indices[4] = 3; indices[5] = 2;
   }
 
   /*
@@ -227,7 +229,7 @@ unsigned int castRay(RTCScene scene,
     //       rayhit.hit.primID,
     //       rayhit.ray.tfar);
 
-    return 1;
+    return rayhit.hit.primID+1;
 
   }
   else{
@@ -298,7 +300,7 @@ int main()
           int xdir = j - fwidth/2;
           int ydir = i - fheight/2;
           unsigned int hit = castRay(scene, 0, 0, 0, xdir, ydir, 1);
-          data[i][j][k] = hit * 255 * 256 * 256 * 256;
+          data[i][j][k] = hit * 127 * 256 * 256 * 256;
         }
       }
     }
