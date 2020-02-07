@@ -137,9 +137,9 @@ RTCScene initializeScene(RTCDevice device)
 
   if (vertices && indices)
   {
-    vertices[0] = 0.f; vertices[1] = 0.f; vertices[2] = 0.f;
-    vertices[3] = 1.f; vertices[4] = 0.f; vertices[5] = 0.f;
-    vertices[6] = 0.f; vertices[7] = 1.f; vertices[8] = 0.f;
+    vertices[0] = -10.f; vertices[1] = -2.f; vertices[2] = -10.f;
+    vertices[3] = -10.f; vertices[4] = -2.f; vertices[5] = +10.f;
+    vertices[6] = +10.f; vertices[7] = -2.f; vertices[8] = -10.f;
 
     indices[0] = 0; indices[1] = 1; indices[2] = 2;
   }
@@ -175,7 +175,7 @@ RTCScene initializeScene(RTCDevice device)
  * Cast a single ray with origin (ox, oy, oz) and direction
  * (dx, dy, dz).
  */
-void castRay(RTCScene scene,
+unsigned int castRay(RTCScene scene,
              float ox, float oy, float oz,
              float dx, float dy, float dz)
 {
@@ -212,7 +212,7 @@ void castRay(RTCScene scene,
    */
   rtcIntersect1(scene, &context, &rayhit);
 
-  printf("%f, %f, %f: ", ox, oy, oz);
+  //printf("%f, %f, %f: ", ox, oy, oz);
   if (rayhit.hit.geomID != RTC_INVALID_GEOMETRY_ID)
   {
     /* Note how geomID and primID identify the geometry we just hit.
@@ -222,13 +222,19 @@ void castRay(RTCScene scene,
      * get geomID=0 / primID=0 for all hits.
      * There is also instID, used for instancing. See
      * the instancing tutorials for more information */
-    printf("Found intersection on geometry %d, primitive %d at tfar=%f\n",
-           rayhit.hit.geomID,
-           rayhit.hit.primID,
-           rayhit.ray.tfar);
+    //printf("Found intersection on geometry %d, primitive %d at tfar=%f\n",
+    //       rayhit.hit.geomID,
+    //       rayhit.hit.primID,
+    //       rayhit.ray.tfar);
+
+    return 1;
+
   }
-  else
-    printf("Did not find any intersection.\n");
+  else{
+    //printf("Did not find any intersection.\n");
+
+    return 0;
+  }
 }
 
 
@@ -240,12 +246,6 @@ int main()
    * our errorFunction. */
   RTCDevice device = initializeDevice();
   RTCScene scene = initializeScene(device);
-
-  /* This will hit the triangle at t=1. */
-  castRay(scene, 0, 0, -1, 0, 0, 1);
-
-  /* This will not hit anything. */
-  castRay(scene, 1, 1, -1, 0, 0, 1);
 
   int width  = 256;
   int height = 256;
@@ -295,7 +295,10 @@ int main()
     for (int i = 0; i < fheight; i++){
       for (int j = 0; j < fwidth; j++){
         for (int k = 0; k < 3; k++){
-          data[i][j][k] = (rand() % 256) * 256 * 256 * 256;
+          int xdir = j - fwidth/2;
+          int ydir = i - fheight/2;
+          unsigned int hit = castRay(scene, 0, 0, 0, xdir, ydir, 1);
+          data[i][j][k] = hit * 255 * 256 * 256 * 256;
         }
       }
     }
