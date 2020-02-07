@@ -16,6 +16,7 @@
 
 #include <embree3/rtcore.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <math.h>
 #include <limits>
 #include <cstddef>
@@ -280,6 +281,26 @@ int main()
   //flag set to 1 on Alt-F4 or pressing close widget on title bar
   while (!glfwWindowShouldClose(window))
   {
+
+    //frame buffer dimensions
+    int fwidth;
+    int fheight;
+    glfwGetFramebufferSize(window, &fwidth, &fheight);
+
+
+    glViewport(0, 0, fwidth, fheight);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    unsigned int data[fheight][fwidth][3];
+    for (int i = 0; i < fheight; i++){
+      for (int j = 0; j < fwidth; j++){
+        for (int k = 0; k < 3; k++){
+          data[i][j][k] = (rand() % 256) * 256 * 256 * 256;
+        }
+      }
+    }
+
+    glDrawPixels(fwidth, fheight, GL_RGB, GL_UNSIGNED_INT, data);
 
     //swaps front and back buffer
     glfwSwapBuffers(window);
