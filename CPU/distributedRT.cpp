@@ -53,6 +53,14 @@
 RTC_NAMESPACE_OPEN
 #endif
 
+glm::vec3 groundFaceColours[3] = {glm::vec3(0, 0, 0), glm::vec3(128, 128, 128), glm::vec3(64, 64, 64)};
+glm::vec3 cubeFaceColours[12] = {glm::vec3(32, 0, 0), glm::vec3(0, 32, 0), glm::vec3(0, 0, 32),
+                                 glm::vec3(64, 0, 0), glm::vec3(0, 64, 0), glm::vec3(0, 0, 64),
+                                 glm::vec3(128, 0, 0), glm::vec3(0, 128, 0), glm::vec3(0, 0, 128),
+                                 glm::vec3(255, 0, 0), glm::vec3(0, 255, 0), glm::vec3(0, 0, 255)};
+
+
+
 /*
  * We will register this error handler with the device in initializeDevice(),
  * so that we are automatically informed on errors.
@@ -136,6 +144,11 @@ RTCScene initializeScene(RTCDevice device)
                                                           3*sizeof(unsigned),
                                                           2);
 
+
+
+  /* create face and vertex color arrays */
+  //groundVertexColours = (glm::vec3*) alignedMalloc(4*sizeof(glm::vec3),16);
+
   // For buffer, need to be array of values  rather than vec3
   //Casting from vec3 more memory taken up, just write directly
   if (groundVertices && groundIndices)
@@ -147,6 +160,14 @@ RTCScene initializeScene(RTCDevice device)
 
     groundIndices[0] = 0; groundIndices[1] = 1; groundIndices[2] = 2;
     groundIndices[3] = 1; groundIndices[4] = 3; groundIndices[5] = 2;
+
+    //groundVertexColours[0] = glm::vec3(128,128,128);
+    //groundVertexColours[1] = glm::vec3(128,128,128);
+    //groundVertexColours[2] = glm::vec3(128,128,128);
+    //groundVertexColours[3] = glm::vec3(128,128,128);
+
+    //groundFaceColours[0] = glm::vec3(128,128,128);
+    //groundFaceColours[1] = glm::vec3(128,128,128);
   }
 
   /*
@@ -229,7 +250,7 @@ RTCScene initializeScene(RTCDevice device)
  * Cast a single ray with origin (ox, oy, oz) and direction
  * (dx, dy, dz).
  */
-unsigned int castRay(RTCScene scene,
+glm::vec2 castRay(RTCScene scene,
              float ox, float oy, float oz,
              float dx, float dy, float dz)
 {
@@ -280,14 +301,13 @@ unsigned int castRay(RTCScene scene,
     //       rayhit.hit.geomID,
     //       rayhit.hit.primID,
     //       rayhit.ray.tfar);
-
-    return rayhit.hit.geomID+1;
+    return glm::vec2(rayhit.hit.geomID+1, rayhit.hit.primID+1);
 
   }
   else{
     //printf("Did not find any intersection.\n");
 
-    return 0;
+    return glm::vec2(0,0);
   }
 }
 
@@ -348,12 +368,15 @@ int main()
     unsigned int data[fheight][fwidth][3];
     for (int i = 0; i < fheight; i++){
       for (int j = 0; j < fwidth; j++){
-        for (int k = 0; k < 3; k++){
-          int xdir = j - fwidth/2;
-          int ydir = i - fheight/2;
-          unsigned int hit = castRay(scene, 0, 0, -1.025, xdir, ydir, 1);
-          data[i][j][k] = hit * 127 * 256 * 256 * 256;
-        }
+        int xdir = j - fwidth/2;
+        int ydir = i - fheight/2;
+        glm::vec2 hit = castRay(scene, 0, 0, -1.025, xdir, ydir, 1);
+        glm::vec3 colour = glm::vec3(0, 0, 0);
+        if (hit.x == 1) colour = groundFaceColours[(int)hit.y];
+        if (hit.x == 2) colour = cubeFaceColours[(int)hit.y];
+        data[i][j][0] = colour.x * 256 * 256 * 256;
+        data[i][j][1] = colour.y * 256 * 256 * 256;
+        data[i][j][2] = colour.z * 256 * 256 * 256;
       }
     }
 
