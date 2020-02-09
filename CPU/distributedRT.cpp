@@ -53,11 +53,11 @@
 RTC_NAMESPACE_OPEN
 #endif
 
-glm::vec3 groundFaceColours[3] = {glm::vec3(0, 0, 0), glm::vec3(128, 128, 128), glm::vec3(64, 64, 64)};
-glm::vec3 cubeFaceColours[12] = {glm::vec3(32, 0, 0), glm::vec3(0, 32, 0), glm::vec3(0, 0, 32),
-                                 glm::vec3(64, 0, 0), glm::vec3(0, 64, 0), glm::vec3(0, 0, 64),
-                                 glm::vec3(128, 0, 0), glm::vec3(0, 128, 0), glm::vec3(0, 0, 128),
-                                 glm::vec3(255, 0, 0), glm::vec3(0, 255, 0), glm::vec3(0, 0, 255)};
+glm::vec3 groundFaceColours[3] = {glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(128.0f, 128.0f, 128.0f), glm::vec3(128.0f, 128.0f, 128.0f)};
+glm::vec3 cubeFaceColours[12] = {glm::vec3(32.0f, 0.0f, 0.0f), glm::vec3(0.0f, 32.0f, 0.0f), glm::vec3(0.0f, 0.0f, 32.0f),
+                                 glm::vec3(64.0f, 0.0f, 0.0f), glm::vec3(0.0f, 64.0f, 0.0f), glm::vec3(0.0f, 0.0f, 64.0f),
+                                 glm::vec3(128.0f, 0.0f, 0.0f), glm::vec3(0.0f, 128.0f, 0.0f), glm::vec3(0.0f, 0.0f, 128.0f),
+                                 glm::vec3(255.0f, 0.0f, 0.0f), glm::vec3(0.0f, 255.0f, 0.0f), glm::vec3(0.0f, 0.0f, 255.0f)};
 
 
 
@@ -250,9 +250,7 @@ RTCScene initializeScene(RTCDevice device)
  * Cast a single ray with origin (ox, oy, oz) and direction
  * (dx, dy, dz).
  */
-glm::vec2 castRay(RTCScene scene,
-             float ox, float oy, float oz,
-             float dx, float dy, float dz)
+glm::vec3 castRay(RTCScene scene, glm::vec3 origin, glm::vec3 direction)
 {
   /*
    * The intersect context can be used to set intersection
@@ -268,12 +266,12 @@ glm::vec2 castRay(RTCScene scene,
    * for rtcIntersect1() for details.
    */
   struct RTCRayHit rayhit;
-  rayhit.ray.org_x = ox;
-  rayhit.ray.org_y = oy;
-  rayhit.ray.org_z = oz;
-  rayhit.ray.dir_x = dx;
-  rayhit.ray.dir_y = dy;
-  rayhit.ray.dir_z = dz;
+  rayhit.ray.org_x = origin.x;
+  rayhit.ray.org_y = origin.y;
+  rayhit.ray.org_z = origin.z;
+  rayhit.ray.dir_x = direction.x;
+  rayhit.ray.dir_y = direction.y;
+  rayhit.ray.dir_z = direction.z;
   rayhit.ray.tnear = 0;
   rayhit.ray.tfar = std::numeric_limits<float>::infinity();
   rayhit.ray.mask = 0;
@@ -301,16 +299,62 @@ glm::vec2 castRay(RTCScene scene,
     //       rayhit.hit.geomID,
     //       rayhit.hit.primID,
     //       rayhit.ray.tfar);
-    return glm::vec2(rayhit.hit.geomID+1, rayhit.hit.primID+1);
+    return glm::vec3(rayhit.hit.geomID+1, rayhit.hit.primID+1, rayhit.ray.tfar);
 
   }
   else{
     //printf("Did not find any intersection.\n");
 
-    return glm::vec2(0,0);
+    return glm::vec3(0.0f,0.0f,0.0f);
   }
 }
 
+
+bool castShadowRay(RTCScene scene, glm::vec3 origin, glm::vec3 direction)
+{
+  /*
+   * The intersect context can be used to set intersection
+   * filters or flags, and it also contains the instance ID stack
+   * used in multi-level instancing.
+   */
+  struct RTCIntersectContext context;
+  rtcInitIntersectContext(&context);
+
+  /*
+   * The ray hit structure holds both the ray and the hit.
+   * The user must initialize it properly -- see API documentation
+   * for rtcIntersect1() for details.
+   */
+  struct RTCRay ray;
+  ray.org_x = origin.x;
+  ray.org_y = origin.y;
+  ray.org_z = origin.z;
+  ray.dir_x = direction.x;
+  ray.dir_y = direction.y;
+  ray.dir_z = direction.z;
+  ray.tnear = 0;
+  ray.tfar = std::numeric_limits<float>::infinity();
+  ray.mask = 0;
+  ray.flags = 0;
+
+  /*
+   * There are multiple variants of rtcIntersect. This one
+   * intersects a single ray with the scene.
+   */
+  rtcOccluded1(scene, &context, &ray);
+  //printf("%f, %f, %f: ", ox, oy, oz);
+  if (ray.tfar == std::numeric_limits<float>::infinity())
+  {
+    //did not find intersection
+    return false;
+
+  }
+  else{
+
+    //found intersection
+    return true;
+  }
+}
 
 /* -------------------------------------------------------------------------- */
 
@@ -365,15 +409,25 @@ int main()
     glViewport(0, 0, fwidth, fheight);
     glClear(GL_COLOR_BUFFER_BIT);
 
+    glm::vec3 lightPos = glm::vec3(1.025f, 1.025f,-1.025f);
+    glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, -1.025f);
+
     unsigned int data[fheight][fwidth][3];
     for (int i = 0; i < fheight; i++){
       for (int j = 0; j < fwidth; j++){
-        int xdir = j - fwidth/2;
-        int ydir = i - fheight/2;
-        glm::vec2 hit = castRay(scene, 0, 0, -1.025, xdir, ydir, 1);
-        glm::vec3 colour = glm::vec3(0, 0, 0);
+        float xdir = j - fwidth/2;
+        float ydir = i - fheight/2;
+        glm::vec3 rayDir = glm::vec3(xdir, ydir, 1.0f);
+        glm::vec3 hit = castRay(scene, cameraPos, rayDir);
+        glm::vec3 colour = glm::vec3(0.0f, 0.0f, 0.0f);
         if (hit.x == 1) colour = groundFaceColours[(int)hit.y];
         if (hit.x == 2) colour = cubeFaceColours[(int)hit.y];
+        if (hit.z != 0) {
+          glm::vec3 intersectionPos = cameraPos + hit.z*rayDir;
+          glm::vec3 shadowDir = lightPos-intersectionPos;
+          intersectionPos = intersectionPos + 0.01f*shadowDir;
+          if (castShadowRay(scene, intersectionPos, shadowDir)) colour = colour*0.5f;
+        }
         data[i][j][0] = colour.x * 256 * 256 * 256;
         data[i][j][1] = colour.y * 256 * 256 * 256;
         data[i][j][2] = colour.z * 256 * 256 * 256;
