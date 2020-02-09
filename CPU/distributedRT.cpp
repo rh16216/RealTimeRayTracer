@@ -20,6 +20,7 @@
 #include <math.h>
 #include <limits>
 #include <cstddef>
+#include <glm/glm.hpp>
 #include <GLFW/glfw3.h>
 
 
@@ -120,37 +121,39 @@ RTCScene initializeScene(RTCDevice device)
    * to ensure proper alignment and padding. This is described in
    * more detail in the API documentation.
    */
-  RTCGeometry geom = rtcNewGeometry(device, RTC_GEOMETRY_TYPE_TRIANGLE);
-  float* vertices = (float*) rtcSetNewGeometryBuffer(geom,
+  RTCGeometry ground = rtcNewGeometry(device, RTC_GEOMETRY_TYPE_TRIANGLE);
+  float* groundVertices = (float*) rtcSetNewGeometryBuffer(ground,
                                                      RTC_BUFFER_TYPE_VERTEX,
                                                      0,
                                                      RTC_FORMAT_FLOAT3,
                                                      3*sizeof(float),
                                                      4);
 
-  unsigned* indices = (unsigned*) rtcSetNewGeometryBuffer(geom,
+  unsigned* groundIndices = (unsigned*) rtcSetNewGeometryBuffer(ground,
                                                           RTC_BUFFER_TYPE_INDEX,
                                                           0,
                                                           RTC_FORMAT_UINT3,
                                                           3*sizeof(unsigned),
                                                           2);
 
-  if (vertices && indices)
+  // For buffer, need to be array of values  rather than vec3
+  //Casting from vec3 more memory taken up, just write directly
+  if (groundVertices && groundIndices)
   {
-    vertices[0] = -10.f; vertices[1] = -2.f; vertices[2] = -10.f;
-    vertices[3] = -10.f; vertices[4] = -2.f; vertices[5] = +10.f;
-    vertices[6] = +10.f; vertices[7] = -2.f; vertices[8] = -10.f;
-    vertices[9] = +10.f; vertices[10] = -2.f; vertices[11] = 10.f;
+    groundVertices[0] = -10.f; groundVertices[1] = -2.f; groundVertices[2] = -10.f;
+    groundVertices[3] = -10.f; groundVertices[4] = -2.f; groundVertices[5] = +10.f;
+    groundVertices[6] = +10.f; groundVertices[7] = -2.f; groundVertices[8] = -10.f;
+    groundVertices[9] = +10.f; groundVertices[10] = -2.f; groundVertices[11] = 10.f;
 
-    indices[0] = 0; indices[1] = 1; indices[2] = 2;
-    indices[3] = 1; indices[4] = 3; indices[5] = 2;
+    groundIndices[0] = 0; groundIndices[1] = 1; groundIndices[2] = 2;
+    groundIndices[3] = 1; groundIndices[4] = 3; groundIndices[5] = 2;
   }
 
   /*
    * You must commit geometry objects when you are done setting them up,
    * or you will not get any intersections.
    */
-  rtcCommitGeometry(geom);
+  rtcCommitGeometry(ground);
 
   /*
    * In rtcAttachGeometry(...), the scene takes ownership of the geom
@@ -161,8 +164,57 @@ RTCScene initializeScene(RTCDevice device)
    * rtcAttachGeometry() returns a geometry ID. We could use this to
    * identify intersected objects later on.
    */
-  rtcAttachGeometry(scene, geom);
-  rtcReleaseGeometry(geom);
+  rtcAttachGeometry(scene, ground);
+  rtcReleaseGeometry(ground);
+
+
+
+  RTCGeometry cube = rtcNewGeometry(device, RTC_GEOMETRY_TYPE_TRIANGLE);
+  float* cubeVertices = (float*) rtcSetNewGeometryBuffer(cube,
+                                                     RTC_BUFFER_TYPE_VERTEX,
+                                                     0,
+                                                     RTC_FORMAT_FLOAT3,
+                                                     3*sizeof(float),
+                                                     8);
+
+  unsigned* cubeIndices = (unsigned*) rtcSetNewGeometryBuffer(cube,
+                                                          RTC_BUFFER_TYPE_INDEX,
+                                                          0,
+                                                          RTC_FORMAT_UINT3,
+                                                          3*sizeof(unsigned),
+                                                          12);
+
+  // For buffer, need to be array of values  rather than vec3
+  //Casting from vec3 more memory taken up, just write directly
+  if (cubeVertices && cubeIndices)
+  {
+    cubeVertices[0] = -1; cubeVertices[1] = -1; cubeVertices[2] = -1;
+    cubeVertices[3] = -1; cubeVertices[4] = -1; cubeVertices[5] = +1;
+    cubeVertices[6] = -1; cubeVertices[7] = +1; cubeVertices[8] = -1;
+    cubeVertices[9] = -1; cubeVertices[10] = +1; cubeVertices[11] = +1;
+    cubeVertices[12] = +1; cubeVertices[13] = -1; cubeVertices[14] = -1;
+    cubeVertices[15] = +1; cubeVertices[16] = -1; cubeVertices[17] = +1;
+    cubeVertices[18] = +1; cubeVertices[19] = +1; cubeVertices[20] = -1;
+    cubeVertices[21] = +1; cubeVertices[22] = +1; cubeVertices[23] = +1;
+
+    cubeIndices[0] = 0; cubeIndices[1] = 1; cubeIndices[2] = 2;
+    cubeIndices[3] = 1; cubeIndices[4] = 3; cubeIndices[5] = 2;
+    cubeIndices[6] = 4; cubeIndices[7] = 6; cubeIndices[8] = 5;
+    cubeIndices[9] = 5; cubeIndices[10] = 6; cubeIndices[11] = 7;
+    cubeIndices[12] = 0; cubeIndices[13] = 4; cubeIndices[14] = 1;
+    cubeIndices[15] = 1; cubeIndices[16] = 4; cubeIndices[17] = 5;
+    cubeIndices[18] = 2; cubeIndices[19] = 3; cubeIndices[20] = 6;
+    cubeIndices[21] = 3; cubeIndices[22] = 7; cubeIndices[23] = 6;
+    cubeIndices[24] = 0; cubeIndices[25] = 2; cubeIndices[26] = 4;
+    cubeIndices[27] = 2; cubeIndices[28] = 6; cubeIndices[29] = 4;
+    cubeIndices[30] = 1; cubeIndices[31] = 5; cubeIndices[32] = 3;
+    cubeIndices[33] = 3; cubeIndices[34] = 5; cubeIndices[35] = 7;
+  }
+
+  rtcCommitGeometry(cube);
+  rtcAttachGeometry(scene, cube);
+  rtcReleaseGeometry(cube);
+
 
   /*
    * Like geometry objects, scenes must be committed. This lets
@@ -229,7 +281,7 @@ unsigned int castRay(RTCScene scene,
     //       rayhit.hit.primID,
     //       rayhit.ray.tfar);
 
-    return rayhit.hit.primID+1;
+    return rayhit.hit.geomID+1;
 
   }
   else{
@@ -299,7 +351,7 @@ int main()
         for (int k = 0; k < 3; k++){
           int xdir = j - fwidth/2;
           int ydir = i - fheight/2;
-          unsigned int hit = castRay(scene, 0, 0, 0, xdir, ydir, 1);
+          unsigned int hit = castRay(scene, 0, 0, -1.025, xdir, ydir, 1);
           data[i][j][k] = hit * 127 * 256 * 256 * 256;
         }
       }
