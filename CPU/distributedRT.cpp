@@ -59,6 +59,10 @@ glm::vec3 cubeFaceColours[12] = {glm::vec3(32.0f, 0.0f, 0.0f), glm::vec3(0.0f, 3
                                  glm::vec3(128.0f, 0.0f, 0.0f), glm::vec3(0.0f, 128.0f, 0.0f), glm::vec3(0.0f, 0.0f, 128.0f),
                                  glm::vec3(255.0f, 0.0f, 0.0f), glm::vec3(0.0f, 255.0f, 0.0f), glm::vec3(0.0f, 0.0f, 255.0f)};
 
+glm::vec3 lightPos = glm::vec3(1.025f, 1.025f,-1.025f);
+glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, -5.0f);
+glm::vec3 cameraDir = glm::vec3(0.0f, 0.0f, 1.0f);
+float yaw = 0;
 
 
 /*
@@ -83,7 +87,19 @@ static void glfwKeyCallback(GLFWwindow* window, int key, int scancode, int actio
 {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
         glfwSetWindowShouldClose(window, 1); //TODO: GLFW_TRUE HERE??
-}
+
+    if (key == GLFW_KEY_W && action == GLFW_PRESS)
+        cameraPos = cameraPos + 0.5f*cameraDir;
+
+    if (key == GLFW_KEY_A && action == GLFW_PRESS)
+        yaw = yaw - 10.0f;
+
+    if (key == GLFW_KEY_S && action == GLFW_PRESS)
+        cameraPos = cameraPos - 0.5f*cameraDir;
+
+    if (key == GLFW_KEY_D && action == GLFW_PRESS)
+        yaw = yaw + 10.0f;
+  }
 
 
 /*
@@ -409,15 +425,25 @@ int main()
     glViewport(0, 0, fwidth, fheight);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    glm::vec3 lightPos = glm::vec3(1.025f, 1.025f,-1.025f);
-    glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, -1.025f);
+    float radians = (yaw/360)*2*3.14;
+    glm::vec3 rotateCameraCol1 = glm::vec3(cos(radians), 0, -sin(radians));
+    glm::vec3 rotateCameraCol2 = glm::vec3(0.0f, 1.0f, 0.0f);
+    glm::vec3 rotateCameraCol3 = glm::vec3(sin(radians), 0, cos(radians));
+    glm::mat3 rotateCamera = glm::mat3(rotateCameraCol1, rotateCameraCol2, rotateCameraCol3);
 
     unsigned int data[fheight][fwidth][3];
     for (int i = 0; i < fheight; i++){
       for (int j = 0; j < fwidth; j++){
         float xdir = j - fwidth/2;
         float ydir = i - fheight/2;
-        glm::vec3 rayDir = glm::vec3(xdir, ydir, 1.0f);
+        glm::vec3 rayDir = glm::vec3(xdir, ydir, fwidth/2);
+        rayDir = rayDir - cameraPos;
+        rayDir = rotateCamera * rayDir;
+        rayDir = rayDir + cameraPos;
+        rayDir = glm::normalize(rayDir);
+
+        if ((xdir == 0) and (ydir == 0)) cameraDir = rayDir; // try remove this if to make faster??
+
         glm::vec3 hit = castRay(scene, cameraPos, rayDir);
         glm::vec3 colour = glm::vec3(0.0f, 0.0f, 0.0f);
         if (hit.x == 1) colour = groundFaceColours[(int)hit.y];
