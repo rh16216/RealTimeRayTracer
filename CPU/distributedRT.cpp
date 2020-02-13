@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <algorithm>
 #include <limits>
 #include <cstddef>
 #include <glm/glm.hpp>
@@ -59,7 +60,8 @@ glm::vec3 cubeFaceColours[12] = {glm::vec3(32.0f, 0.0f, 0.0f), glm::vec3(0.0f, 3
                                  glm::vec3(128.0f, 0.0f, 0.0f), glm::vec3(0.0f, 128.0f, 0.0f), glm::vec3(0.0f, 0.0f, 128.0f),
                                  glm::vec3(255.0f, 0.0f, 0.0f), glm::vec3(0.0f, 255.0f, 0.0f), glm::vec3(0.0f, 0.0f, 255.0f)};
 
-glm::vec3 lightPos = glm::vec3(1.025f, 1.025f,-1.025f);
+glm::vec3 lightPos = glm::vec3(3.0f, 3.0f, -3.0f);
+glm::vec3 lightIntensity = glm::vec3(255.0f, 255.0f, 255.0f);
 glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, -5.0f);
 glm::vec3 cameraDir = glm::vec3(0.0f, 0.0f, 1.0f);
 float yaw = 0;
@@ -266,7 +268,7 @@ RTCScene initializeScene(RTCDevice device)
  * Cast a single ray with origin (ox, oy, oz) and direction
  * (dx, dy, dz).
  */
-glm::vec3 castRay(RTCScene scene, glm::vec3 origin, glm::vec3 direction)
+struct RTCRayHit castRay(RTCScene scene, glm::vec3 origin, glm::vec3 direction)
 {
   /*
    * The intersect context can be used to set intersection
@@ -301,28 +303,8 @@ glm::vec3 castRay(RTCScene scene, glm::vec3 origin, glm::vec3 direction)
    */
   rtcIntersect1(scene, &context, &rayhit);
 
-  //printf("%f, %f, %f: ", ox, oy, oz);
-  if (rayhit.hit.geomID != RTC_INVALID_GEOMETRY_ID)
-  {
-    /* Note how geomID and primID identify the geometry we just hit.
-     * We could use them here to interpolate geometry information,
-     * compute shading, etc.
-     * Since there is only a single triangle in this scene, we will
-     * get geomID=0 / primID=0 for all hits.
-     * There is also instID, used for instancing. See
-     * the instancing tutorials for more information */
-    //printf("Found intersection on geometry %d, primitive %d at tfar=%f\n",
-    //       rayhit.hit.geomID,
-    //       rayhit.hit.primID,
-    //       rayhit.ray.tfar);
-    return glm::vec3(rayhit.hit.geomID+1, rayhit.hit.primID+1, rayhit.ray.tfar);
+  return rayhit;
 
-  }
-  else{
-    //printf("Did not find any intersection.\n");
-
-    return glm::vec3(0.0f,0.0f,0.0f);
-  }
 }
 
 
@@ -444,13 +426,22 @@ int main()
 
         if ((xdir == 0) and (ydir == 0)) cameraDir = rayDir; // try remove this if to make faster??
 
-        glm::vec3 hit = castRay(scene, cameraPos, rayDir);
-        glm::vec3 colour = glm::vec3(0.0f, 0.0f, 0.0f);
-        if (hit.x == 1) colour = groundFaceColours[(int)hit.y];
-        if (hit.x == 2) colour = cubeFaceColours[(int)hit.y];
-        if (hit.z != 0) {
-          glm::vec3 intersectionPos = cameraPos + hit.z*rayDir;
+        struct RTCRayHit rayhit = castRay(scene, cameraPos, rayDir);
+        glm::vec3 geomColour = glm::vec3(0.0f, 0.0f, 0.0f);
+        glm::vec3 colour = geomColour;
+        if (rayhit.hit.geomID != RTC_INVALID_GEOMETRY_ID) {
+          if (rayhit.hit.geomID == 0) geomColour = groundFaceColours[(int)rayhit.hit.primID+1];
+          if (rayhit.hit.geomID == 1) geomColour = cubeFaceColours[(int)rayhit.hit.primID+1];
+          glm::vec3 intersectionPos = cameraPos + rayhit.ray.tfar*rayDir;
           glm::vec3 shadowDir = lightPos-intersectionPos;
+          float rsquared = (float)pow(glm::length(shadowDir), 2);
+          glm::vec3 incidentLight = lightIntensity/(4.0f*3.14f*rsquared);
+          //printf("incidentLight: %f %f %f \n", incidentLight.x, incidentLight.y, incidentLight.z);
+          glm::vec3 geomNormal = glm::normalize(glm::vec3(rayhit.hit.Ng_x, rayhit.hit.Ng_y, rayhit.hit.Ng_z));
+          shadowDir = glm::normalize(shadowDir);
+          glm::vec3 diffuseDirect = incidentLight*geomColour*std::max(glm::dot(geomNormal, shadowDir), 0.0f);
+          colour = diffuseDirect;
+          //colour = geomColour;
           intersectionPos = intersectionPos + 0.01f*shadowDir;
           if (castShadowRay(scene, intersectionPos, shadowDir)) colour = colour*0.5f;
         }
