@@ -62,6 +62,7 @@ glm::vec3 cubeFaceColours[12] = {glm::vec3(32.0f, 0.0f, 0.0f), glm::vec3(0.0f, 3
 
 glm::vec3 lightPos = glm::vec3(3.0f, 3.0f, -3.0f);
 glm::vec3 lightIntensity = glm::vec3(255.0f, 255.0f, 255.0f);
+float lightRadius = 0.5f;
 glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, -5.0f);
 glm::vec3 cameraDir = glm::vec3(0.0f, 0.0f, 1.0f);
 float yaw = 0;
@@ -363,8 +364,8 @@ int main()
   RTCDevice device = initializeDevice();
   RTCScene scene = initializeScene(device);
 
-  int width  = 256;
-  int height = 256;
+  int width  = 512;
+  int height = 512;
 
   //specifies callback function to handle GLFW errors
   glfwSetErrorCallback(glfwErrorFunction);
@@ -436,14 +437,28 @@ int main()
           glm::vec3 shadowDir = lightPos-intersectionPos;
           float rsquared = (float)pow(glm::length(shadowDir), 2);
           glm::vec3 incidentLight = lightIntensity/(4.0f*3.14f*rsquared);
-          //printf("incidentLight: %f %f %f \n", incidentLight.x, incidentLight.y, incidentLight.z);
           glm::vec3 geomNormal = glm::normalize(glm::vec3(rayhit.hit.Ng_x, rayhit.hit.Ng_y, rayhit.hit.Ng_z));
           shadowDir = glm::normalize(shadowDir);
           glm::vec3 diffuseDirect = incidentLight*geomColour*std::max(glm::dot(geomNormal, shadowDir), 0.0f);
           colour = diffuseDirect;
-          //colour = geomColour;
-          intersectionPos = intersectionPos + 0.01f*shadowDir;
-          if (castShadowRay(scene, intersectionPos, shadowDir)) colour = colour*0.5f;
+
+          int numRays = 16;
+          int numIntersects = 0;
+          std::default_random_engine generator;
+          std::normal_distribution<float> d{0, 1};
+          for (int i = 0; i < numRays; i++){
+            glm::vec3 perpVec0 = glm::vec3(shadowDir.z, 0, -shadowDir.x);
+            glm::vec3 perpVec1 = glm::cross(shadowDir, perpVec0);
+            float sample0 = d(generator);
+            float sample1 = d(generator);
+            glm::vec3 sampleLightPos = lightPos + lightRadius*(sample0*perpVec0+sample1*perpVec1);
+            glm::vec3 sampleShadowDir = sampleLightPos-intersectionPos;
+            sampleShadowDir = glm::normalize(sampleShadowDir);
+            intersectionPos = intersectionPos + 0.01f*shadowDir;
+            if (castShadowRay(scene, intersectionPos, sampleShadowDir)) numIntersects++;
+          }
+          float shadowFraction = (float)numIntersects/(float)numRays;
+          colour = colour * (1-shadowFraction);
         }
         data[i][j][0] = colour.x * 256 * 256 * 256;
         data[i][j][1] = colour.y * 256 * 256 * 256;
