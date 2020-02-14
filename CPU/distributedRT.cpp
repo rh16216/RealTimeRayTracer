@@ -55,9 +55,9 @@ RTC_NAMESPACE_OPEN
 #endif
 
 glm::vec3 groundFaceColours[3] = {glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(128.0f, 128.0f, 128.0f), glm::vec3(128.0f, 128.0f, 128.0f)};
-glm::vec3 cubeFaceColours[12] = {glm::vec3(32.0f, 0.0f, 0.0f), glm::vec3(0.0f, 32.0f, 0.0f), glm::vec3(0.0f, 0.0f, 32.0f),
-                                 glm::vec3(64.0f, 0.0f, 0.0f), glm::vec3(0.0f, 64.0f, 0.0f), glm::vec3(0.0f, 0.0f, 64.0f),
-                                 glm::vec3(128.0f, 0.0f, 0.0f), glm::vec3(0.0f, 128.0f, 0.0f), glm::vec3(0.0f, 0.0f, 128.0f),
+glm::vec3 cubeFaceColours[12] = {glm::vec3(255.0f, 0.0f, 0.0f), glm::vec3(0.0f, 255.0f, 0.0f), glm::vec3(0.0f, 0.0f, 255.0f),
+                                 glm::vec3(255.0f, 0.0f, 0.0f), glm::vec3(0.0f, 255.0f, 0.0f), glm::vec3(0.0f, 0.0f, 255.0f),
+                                 glm::vec3(255.0f, 0.0f, 0.0f), glm::vec3(0.0f, 255.0f, 0.0f), glm::vec3(0.0f, 0.0f, 255.0f),
                                  glm::vec3(255.0f, 0.0f, 0.0f), glm::vec3(0.0f, 255.0f, 0.0f), glm::vec3(0.0f, 0.0f, 255.0f)};
 
 glm::vec3 lightPos = glm::vec3(3.0f, 3.0f, -3.0f);
@@ -172,10 +172,10 @@ RTCScene initializeScene(RTCDevice device)
   //Casting from vec3 more memory taken up, just write directly
   if (groundVertices && groundIndices)
   {
-    groundVertices[0] = -10.f; groundVertices[1] = -2.f; groundVertices[2] = -10.f;
-    groundVertices[3] = -10.f; groundVertices[4] = -2.f; groundVertices[5] = +10.f;
-    groundVertices[6] = +10.f; groundVertices[7] = -2.f; groundVertices[8] = -10.f;
-    groundVertices[9] = +10.f; groundVertices[10] = -2.f; groundVertices[11] = 10.f;
+    groundVertices[0] = -10.f; groundVertices[1] = -1.5f; groundVertices[2] = -10.f;
+    groundVertices[3] = -10.f; groundVertices[4] = -1.5f; groundVertices[5] = +10.f;
+    groundVertices[6] = +10.f; groundVertices[7] = -1.5f; groundVertices[8] = -10.f;
+    groundVertices[9] = +10.f; groundVertices[10] = -1.5f; groundVertices[11] = 10.f;
 
     groundIndices[0] = 0; groundIndices[1] = 1; groundIndices[2] = 2;
     groundIndices[3] = 1; groundIndices[4] = 3; groundIndices[5] = 2;
@@ -440,13 +440,44 @@ int main()
           glm::vec3 geomNormal = glm::normalize(glm::vec3(rayhit.hit.Ng_x, rayhit.hit.Ng_y, rayhit.hit.Ng_z));
           shadowDir = glm::normalize(shadowDir);
           glm::vec3 diffuseDirect = incidentLight*geomColour*std::max(glm::dot(geomNormal, shadowDir), 0.0f);
-          colour = diffuseDirect;
 
-          int numRays = 16;
+          std::uniform_real_distribution<float> u(0.0, 1.0);
+          std::default_random_engine ugenerator;
+          glm::vec3 diffuseIndirect = glm::vec3(0.0f, 0.0f, 0.0f);
+          int numIndirectRays = 32;
+
+          for(int k=0; k < numIndirectRays; k++){
+
+            float usample0 = u(ugenerator);
+            float usample1 = u(ugenerator);
+
+            float theta = acos(1.0f-usample0);
+            float phi = 2.0f*3.14f*usample1;
+            glm::vec3 indirectGeomColour = glm::vec3(0.0f, 0.0f, 0.0f);
+            glm::vec3 randvec = glm::vec3(sin(theta)*cos(phi), cos(theta), sin(theta)*sin(phi));
+            glm::vec3 normPerpVec0 = glm::normalize(glm::vec3(geomNormal.z, 0, -geomNormal.x));
+            if (geomNormal.y > geomNormal.x) normPerpVec0 = glm::normalize(glm::vec3(0, geomNormal.z, -geomNormal.y));
+            glm::vec3 normPerpVec1 = glm::normalize(glm::cross(geomNormal, normPerpVec0));
+            glm::mat3 normSpace = glm::mat3(normPerpVec0, geomNormal, normPerpVec1);
+            glm::vec3 normSpaceRandvec = glm::normalize(normSpace*randvec);
+            glm::vec3 newIntersectionPos = intersectionPos + 0.01f*geomNormal;
+            struct RTCRayHit indirectRayhit = castRay(scene, newIntersectionPos, normSpaceRandvec);
+            if (indirectRayhit.hit.geomID != RTC_INVALID_GEOMETRY_ID) {
+              if (indirectRayhit.hit.geomID == 0) indirectGeomColour = groundFaceColours[(int)indirectRayhit.hit.primID+1];
+              if (indirectRayhit.hit.geomID == 1) indirectGeomColour = cubeFaceColours[(int)indirectRayhit.hit.primID+1];
+              glm::vec3 indirectGeomIntensity = indirectGeomColour/(4.0f*3.14f*(float)pow(indirectRayhit.ray.tfar,2));
+              diffuseIndirect = diffuseIndirect + indirectGeomIntensity*std::max(glm::dot(geomNormal, normSpaceRandvec), 0.0f);
+            }
+          }
+          diffuseIndirect = diffuseIndirect/(float)numIndirectRays;
+          diffuseIndirect*geomColour/255.0f;
+          colour = diffuseDirect + diffuseIndirect;
+
+          int numRays = 32;
           int numIntersects = 0;
           std::default_random_engine generator;
           std::normal_distribution<float> d{0, 1};
-          for (int i = 0; i < numRays; i++){
+          for (int l = 0; l < numRays; l++){
             glm::vec3 perpVec0 = glm::vec3(shadowDir.z, 0, -shadowDir.x);
             glm::vec3 perpVec1 = glm::cross(shadowDir, perpVec0);
             float sample0 = d(generator);
@@ -459,6 +490,7 @@ int main()
           }
           float shadowFraction = (float)numIntersects/(float)numRays;
           colour = colour * (1-shadowFraction);
+
         }
         data[i][j][0] = colour.x * 256 * 256 * 256;
         data[i][j][1] = colour.y * 256 * 256 * 256;
