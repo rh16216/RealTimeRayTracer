@@ -355,6 +355,99 @@ bool castShadowRay(RTCScene scene, glm::vec3 origin, glm::vec3 direction)
   }
 }
 
+glm::mat3 moveCamera(){
+
+  float radians = (yaw/360)*2*3.14;
+  glm::vec3 rotateCameraCol1 = glm::vec3(cos(radians), 0, -sin(radians));
+  glm::vec3 rotateCameraCol2 = glm::vec3(0.0f, 1.0f, 0.0f);
+  glm::vec3 rotateCameraCol3 = glm::vec3(sin(radians), 0, cos(radians));
+  glm::mat3 rotateCamera = glm::mat3(rotateCameraCol1, rotateCameraCol2, rotateCameraCol3);
+
+  return rotateCamera;
+}
+
+glm::vec3 findRayDir(float fwidth, float fheight, int i, int j, glm::mat3 rotateCamera){
+
+  float xdir = j - fwidth/2;
+  float ydir = i - fheight/2;
+  glm::vec3 rayDir = glm::vec3(xdir, ydir, fwidth/2);
+  rayDir = rayDir - cameraPos;
+  rayDir = rotateCamera * rayDir;
+  rayDir = rayDir + cameraPos;
+  rayDir = glm::normalize(rayDir);
+
+  return rayDir;
+}
+
+
+glm::vec3 diffuseIndirectLambert(RTCScene scene, glm::vec3 geomNormal, glm::vec3 geomColour, glm::vec3 intersectionPos){
+  std::uniform_real_distribution<float> u(0.0, 1.0);
+  std::default_random_engine ugenerator;
+  glm::vec3 diffuseIndirect = glm::vec3(0.0f, 0.0f, 0.0f);
+  int numIndirectRays = 32;
+
+  for(int k=0; k < numIndirectRays; k++){
+
+    float usample0 = u(ugenerator);
+    float usample1 = u(ugenerator);
+
+    float theta = acos(1.0f-usample0);
+    float phi = 2.0f*3.14f*usample1;
+    glm::vec3 indirectGeomColour = glm::vec3(0.0f, 0.0f, 0.0f);
+    glm::vec3 randvec = glm::vec3(sin(theta)*cos(phi), cos(theta), sin(theta)*sin(phi));
+    glm::vec3 normPerpVec0 = glm::normalize(glm::vec3(geomNormal.z, 0, -geomNormal.x));
+    if (geomNormal.y > geomNormal.x) normPerpVec0 = glm::normalize(glm::vec3(0, geomNormal.z, -geomNormal.y));
+    glm::vec3 normPerpVec1 = glm::normalize(glm::cross(geomNormal, normPerpVec0));
+    glm::mat3 normSpace = glm::mat3(normPerpVec0, geomNormal, normPerpVec1);
+    glm::vec3 normSpaceRandvec = glm::normalize(normSpace*randvec);
+    glm::vec3 newIntersectionPos = intersectionPos + 0.01f*geomNormal;
+    struct RTCRayHit indirectRayhit = castRay(scene, newIntersectionPos, normSpaceRandvec);
+    if (indirectRayhit.hit.geomID != RTC_INVALID_GEOMETRY_ID) {
+      if (indirectRayhit.hit.geomID == 0) indirectGeomColour = groundFaceColours[(int)indirectRayhit.hit.primID+1];
+      if (indirectRayhit.hit.geomID == 1) indirectGeomColour = cubeFaceColours[(int)indirectRayhit.hit.primID+1];
+      glm::vec3 indirectGeomIntensity = indirectGeomColour/(4.0f*3.14f*(float)pow(indirectRayhit.ray.tfar,2));
+      diffuseIndirect = diffuseIndirect + indirectGeomIntensity*std::max(glm::dot(geomNormal, normSpaceRandvec), 0.0f);
+    }
+  }
+  diffuseIndirect = diffuseIndirect/(float)numIndirectRays;
+  diffuseIndirect*geomColour/255.0f;
+
+  return diffuseIndirect;
+}
+
+
+glm::vec3 specularDirectPhong(glm::vec3 intersectionPos, glm::vec3 geomNormal, glm::vec3 incidentLight){
+  float n = 64.0f;
+  glm::vec3 L = glm::normalize(lightPos-intersectionPos);
+  glm::vec3 V = glm::normalize(cameraPos-intersectionPos);
+  glm::vec3 halfVector = glm::normalize((L+V)/2.0f);
+  float component = std::max(glm::dot(geomNormal, halfVector), 0.0f);
+  glm::vec3 specularDirect = incidentLight*(float)pow(component, n);
+
+  return specularDirect;
+}
+
+float softShadows(RTCScene scene, glm::vec3 shadowDir, glm::vec3 intersectionPos){
+  int numRays = 32;
+  int numIntersects = 0;
+  std::default_random_engine generator;
+  std::normal_distribution<float> d{0, 1};
+  for (int l = 0; l < numRays; l++){
+    glm::vec3 perpVec0 = glm::vec3(shadowDir.z, 0, -shadowDir.x);
+    glm::vec3 perpVec1 = glm::cross(shadowDir, perpVec0);
+    float sample0 = d(generator);
+    float sample1 = d(generator);
+    glm::vec3 sampleLightPos = lightPos + lightRadius*(sample0*perpVec0+sample1*perpVec1);
+    glm::vec3 sampleShadowDir = sampleLightPos-intersectionPos;
+    sampleShadowDir = glm::normalize(sampleShadowDir);
+    intersectionPos = intersectionPos + 0.01f*shadowDir;
+    if (castShadowRay(scene, intersectionPos, sampleShadowDir)) numIntersects++;
+  }
+  float shadowFraction = (float)numIntersects/(float)numRays;
+
+  return shadowFraction;
+}
+
 /* -------------------------------------------------------------------------- */
 
 int main()
@@ -408,24 +501,14 @@ int main()
     glViewport(0, 0, fwidth, fheight);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    float radians = (yaw/360)*2*3.14;
-    glm::vec3 rotateCameraCol1 = glm::vec3(cos(radians), 0, -sin(radians));
-    glm::vec3 rotateCameraCol2 = glm::vec3(0.0f, 1.0f, 0.0f);
-    glm::vec3 rotateCameraCol3 = glm::vec3(sin(radians), 0, cos(radians));
-    glm::mat3 rotateCamera = glm::mat3(rotateCameraCol1, rotateCameraCol2, rotateCameraCol3);
+    glm::mat3 rotateCamera = moveCamera();
 
     unsigned int data[fheight][fwidth][3];
     for (int i = 0; i < fheight; i++){
       for (int j = 0; j < fwidth; j++){
-        float xdir = j - fwidth/2;
-        float ydir = i - fheight/2;
-        glm::vec3 rayDir = glm::vec3(xdir, ydir, fwidth/2);
-        rayDir = rayDir - cameraPos;
-        rayDir = rotateCamera * rayDir;
-        rayDir = rayDir + cameraPos;
-        rayDir = glm::normalize(rayDir);
+        glm::vec3 rayDir = findRayDir(fwidth, fheight, i, j, rotateCamera);
 
-        if ((xdir == 0) and (ydir == 0)) cameraDir = rayDir; // try remove this if to make faster??
+        if ((i == fheight/2) and (j == fwidth/2)) cameraDir = rayDir; // try remove this if to make faster??
 
         struct RTCRayHit rayhit = castRay(scene, cameraPos, rayDir);
         glm::vec3 geomColour = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -442,64 +525,15 @@ int main()
           shadowDir = glm::normalize(shadowDir);
           glm::vec3 diffuseDirect = (ambientLight + incidentLight)*geomColour/255.0f*std::max(glm::dot(geomNormal, shadowDir), 0.0f);
 
-          std::uniform_real_distribution<float> u(0.0, 1.0);
-          std::default_random_engine ugenerator;
-          glm::vec3 diffuseIndirect = glm::vec3(0.0f, 0.0f, 0.0f);
-          int numIndirectRays = 32;
 
-          for(int k=0; k < numIndirectRays; k++){
+          glm::vec3 diffuseIndirect = diffuseIndirectLambert(scene, geomNormal, geomColour, intersectionPos);
 
-            float usample0 = u(ugenerator);
-            float usample1 = u(ugenerator);
-
-            float theta = acos(1.0f-usample0);
-            float phi = 2.0f*3.14f*usample1;
-            glm::vec3 indirectGeomColour = glm::vec3(0.0f, 0.0f, 0.0f);
-            glm::vec3 randvec = glm::vec3(sin(theta)*cos(phi), cos(theta), sin(theta)*sin(phi));
-            glm::vec3 normPerpVec0 = glm::normalize(glm::vec3(geomNormal.z, 0, -geomNormal.x));
-            if (geomNormal.y > geomNormal.x) normPerpVec0 = glm::normalize(glm::vec3(0, geomNormal.z, -geomNormal.y));
-            glm::vec3 normPerpVec1 = glm::normalize(glm::cross(geomNormal, normPerpVec0));
-            glm::mat3 normSpace = glm::mat3(normPerpVec0, geomNormal, normPerpVec1);
-            glm::vec3 normSpaceRandvec = glm::normalize(normSpace*randvec);
-            glm::vec3 newIntersectionPos = intersectionPos + 0.01f*geomNormal;
-            struct RTCRayHit indirectRayhit = castRay(scene, newIntersectionPos, normSpaceRandvec);
-            if (indirectRayhit.hit.geomID != RTC_INVALID_GEOMETRY_ID) {
-              if (indirectRayhit.hit.geomID == 0) indirectGeomColour = groundFaceColours[(int)indirectRayhit.hit.primID+1];
-              if (indirectRayhit.hit.geomID == 1) indirectGeomColour = cubeFaceColours[(int)indirectRayhit.hit.primID+1];
-              glm::vec3 indirectGeomIntensity = indirectGeomColour/(4.0f*3.14f*(float)pow(indirectRayhit.ray.tfar,2));
-              diffuseIndirect = diffuseIndirect + indirectGeomIntensity*std::max(glm::dot(geomNormal, normSpaceRandvec), 0.0f);
-            }
-          }
-          diffuseIndirect = diffuseIndirect/(float)numIndirectRays;
-          diffuseIndirect*geomColour/255.0f;
-
-
-          float n = 64.0f;
-          glm::vec3 L = glm::normalize(lightPos-intersectionPos);
-          glm::vec3 V = glm::normalize(cameraPos-intersectionPos);
-          glm::vec3 halfVector = glm::normalize((L+V)/2.0f);
-          float component = std::max(glm::dot(geomNormal, halfVector), 0.0f);
-          glm::vec3 specularDirect = incidentLight*(float)pow(component, n);
+          glm::vec3 specularDirect = specularDirectPhong(intersectionPos, geomNormal, incidentLight);
 
           colour = diffuseDirect + diffuseIndirect + specularDirect;
           //colour = specularDirect;
 
-          int numRays = 32;
-          int numIntersects = 0;
-          std::default_random_engine generator;
-          std::normal_distribution<float> d{0, 1};
-          for (int l = 0; l < numRays; l++){
-            glm::vec3 perpVec0 = glm::vec3(shadowDir.z, 0, -shadowDir.x);
-            glm::vec3 perpVec1 = glm::cross(shadowDir, perpVec0);
-            float sample0 = d(generator);
-            float sample1 = d(generator);
-            glm::vec3 sampleLightPos = lightPos + lightRadius*(sample0*perpVec0+sample1*perpVec1);
-            glm::vec3 sampleShadowDir = sampleLightPos-intersectionPos;
-            sampleShadowDir = glm::normalize(sampleShadowDir);
-            intersectionPos = intersectionPos + 0.01f*shadowDir;
-            if (castShadowRay(scene, intersectionPos, sampleShadowDir)) numIntersects++;
-          }
-          float shadowFraction = (float)numIntersects/(float)numRays;
+          float shadowFraction = softShadows(scene, shadowDir, intersectionPos);
           colour = colour * (1-shadowFraction);
 
         }
