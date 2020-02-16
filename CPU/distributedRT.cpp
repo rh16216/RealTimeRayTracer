@@ -60,8 +60,8 @@ glm::vec3 cubeFaceColours[12] = {glm::vec3(255.0f, 0.0f, 0.0f), glm::vec3(0.0f, 
                                  glm::vec3(255.0f, 0.0f, 0.0f), glm::vec3(0.0f, 255.0f, 0.0f), glm::vec3(0.0f, 0.0f, 255.0f),
                                  glm::vec3(255.0f, 0.0f, 0.0f), glm::vec3(0.0f, 255.0f, 0.0f), glm::vec3(0.0f, 0.0f, 255.0f)};
 
-glm::vec3 lightPos = glm::vec3(3.0f, 3.0f, -3.0f);
-glm::vec3 lightIntensity = glm::vec3(255.0f, 255.0f, 255.0f);
+glm::vec3 lightPos = glm::vec3(1.5f, 1.5f, -3.0f);
+glm::vec3 lightIntensity = 30.0f*glm::vec3(255.0f, 255.0f, 255.0f);
 float lightRadius = 0.5f;
 glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, -5.0f);
 glm::vec3 cameraDir = glm::vec3(0.0f, 0.0f, 1.0f);
@@ -430,6 +430,7 @@ int main()
         struct RTCRayHit rayhit = castRay(scene, cameraPos, rayDir);
         glm::vec3 geomColour = glm::vec3(0.0f, 0.0f, 0.0f);
         glm::vec3 colour = geomColour;
+        glm::vec3 ambientLight = glm::vec3(50.0f, 50.0f, 50.0f);
         if (rayhit.hit.geomID != RTC_INVALID_GEOMETRY_ID) {
           if (rayhit.hit.geomID == 0) geomColour = groundFaceColours[(int)rayhit.hit.primID+1];
           if (rayhit.hit.geomID == 1) geomColour = cubeFaceColours[(int)rayhit.hit.primID+1];
@@ -439,7 +440,7 @@ int main()
           glm::vec3 incidentLight = lightIntensity/(4.0f*3.14f*rsquared);
           glm::vec3 geomNormal = glm::normalize(glm::vec3(rayhit.hit.Ng_x, rayhit.hit.Ng_y, rayhit.hit.Ng_z));
           shadowDir = glm::normalize(shadowDir);
-          glm::vec3 diffuseDirect = incidentLight*geomColour*std::max(glm::dot(geomNormal, shadowDir), 0.0f);
+          glm::vec3 diffuseDirect = (ambientLight + incidentLight)*geomColour/255.0f*std::max(glm::dot(geomNormal, shadowDir), 0.0f);
 
           std::uniform_real_distribution<float> u(0.0, 1.0);
           std::default_random_engine ugenerator;
@@ -471,7 +472,17 @@ int main()
           }
           diffuseIndirect = diffuseIndirect/(float)numIndirectRays;
           diffuseIndirect*geomColour/255.0f;
-          colour = diffuseDirect + diffuseIndirect;
+
+
+          float n = 64.0f;
+          glm::vec3 L = glm::normalize(lightPos-intersectionPos);
+          glm::vec3 V = glm::normalize(cameraPos-intersectionPos);
+          glm::vec3 halfVector = glm::normalize((L+V)/2.0f);
+          float component = std::max(glm::dot(geomNormal, halfVector), 0.0f);
+          glm::vec3 specularDirect = incidentLight*(float)pow(component, n);
+
+          colour = diffuseDirect + diffuseIndirect + specularDirect;
+          //colour = specularDirect;
 
           int numRays = 32;
           int numIntersects = 0;
@@ -492,9 +503,9 @@ int main()
           colour = colour * (1-shadowFraction);
 
         }
-        data[i][j][0] = colour.x * 256 * 256 * 256;
-        data[i][j][1] = colour.y * 256 * 256 * 256;
-        data[i][j][2] = colour.z * 256 * 256 * 256;
+        data[i][j][0] = std::min(255.0f, colour.x) * 256 * 256 * 256;
+        data[i][j][1] = std::min(255.0f, colour.y) * 256 * 256 * 256;
+        data[i][j][2] = std::min(255.0f, colour.z) * 256 * 256 * 256;
       }
     }
 
