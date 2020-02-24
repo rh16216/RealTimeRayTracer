@@ -36,12 +36,8 @@
  *
  * Compile this file using
  *
- *   gcc -std=c99 \
- *       -I<PATH>/<TO>/<EMBREE>/include \
- *       -o minimal \
- *       minimal.c \
- *       -L<PATH>/<TO>/<EMBREE>/lib \
- *       -lembree3
+ *   g++ -std=c++0x -I/home/rudy/Documents/embree/include $(pkg-config --cflags glfw3) -o distributedRT distributedRT.cpp $(pkg-config --static --libs glfw3) -L/home/rudy/Documents/embree/lib -lembree3
+
  *
  * You should be able to compile this using a C or C++ compiler.
  */
