@@ -17,10 +17,14 @@
 #include <embree3/rtcore.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <math.h>
 #include <algorithm>
 #include <limits>
 #include <cstddef>
+#include <iostream>
+#include <fstream>
+#include <sstream>
 #include <glm/glm.hpp>
 #include <GLFW/glfw3.h>
 
@@ -121,6 +125,151 @@ RTCDevice initializeDevice()
 
   rtcSetDeviceErrorFunction(device, errorFunction, NULL);
   return device;
+}
+
+struct material{
+  char *name;
+  float Ns;
+  float Ni;
+  float d;
+  glm::vec2 Tr;
+  float Tf[3];
+  int illum;
+  float Ka[3];
+  float Kd[3];
+  float Ks[3];
+  float Ke[3];
+  char *mapKd;
+};
+
+void parseMTL(){
+  std::ifstream mtlFile("default.mtl");
+  char text[256];
+  mtlFile.getline(text, 256);
+  while ((text[0] == '#') || isspace(text[0]) || !text[0]){
+    //printf("Loop 1: %c\n", text[0]);
+    //parse comments at top
+    mtlFile.getline(text, 256);
+  }
+  struct material newMaterial = {"name", 0.0f, 0.0f, 0.0f, glm::vec2(0.0f, 0.0f), {0.0f,0.0f,0.0f}, 1, {0.0f,0.0f,0.0f},{0.0f,0.0f,0.0f},{0.0f,0.0f,0.0f},{0.0f,0.0f,0.0f}, "map"};
+  struct material *matP = &newMaterial;
+  char *word;
+  char name[256];
+  char mapKd[256];
+  while(text[0]){
+    //printf("Loop 2: %s\n", text);
+    //parse single material definition
+    std::istringstream spaceStream(text);
+    spaceStream >> word;
+
+    if (!strcmp(word, "newmtl")){
+      spaceStream >> word;
+      strcpy(name, word);
+      matP->name = name;
+    }
+
+    if (!strcmp(word, "Ns")){
+      spaceStream >> word;
+      matP->Ns = std::atof(word);
+    }
+    else if (!strcmp(word, "Ni")){
+      spaceStream >> word;
+      matP->Ni = std::atof(word);
+    }
+    else if (!strcmp(word, "d")){
+      spaceStream >> word;
+      matP->d = std::atof(word);
+    }
+    else if (!strcmp(word, "Tr")){
+      glm::vec2 Tr = glm::vec2(0.0f, 0.0f);
+      spaceStream >> word;
+      Tr.x = std::atof(word);
+      spaceStream >> word;
+      Tr.y = std::atof(word);
+      matP->Tr = Tr;
+    }
+    else if (!strcmp(word, "Tf")){
+      spaceStream >> word;
+      float x = std::atof(word);
+      matP->Tf[0] = x;
+      spaceStream >> word;
+      float y = std::atof(word);
+      matP->Tf[1] = y;
+      spaceStream >> word;
+      float z = std::atof(word);
+      matP->Tf[2] = z;
+    }
+    else if (!strcmp(word, "illum")){
+      spaceStream >> word;
+      matP->illum = std::atoi(word);
+    }
+    else if (!strcmp(word, "Ka")){
+      spaceStream >> word;
+      float x = std::atof(word);
+      matP->Ka[0] = x;
+      spaceStream >> word;
+      float y = std::atof(word);
+      matP->Ka[1] = y;
+      spaceStream >> word;
+      float z = std::atof(word);
+      matP->Ka[2] = z;
+    }
+    else if (!strcmp(word, "Kd")){
+      spaceStream >> word;
+      float x = std::atof(word);
+      matP->Kd[0] = x;
+      spaceStream >> word;
+      float y = std::atof(word);
+      matP->Kd[1] = y;
+      spaceStream >> word;
+      float z = std::atof(word);
+      matP->Kd[2] = z;
+    }
+    else if (!strcmp(word, "Ks")){
+      spaceStream >> word;
+      float x = std::atof(word);
+      matP->Ks[0] = x;
+      spaceStream >> word;
+      float y = std::atof(word);
+      matP->Ks[1] = y;
+      spaceStream >> word;
+      float z = std::atof(word);
+      matP->Ks[2] = z;
+    }
+    else if (!strcmp(word, "Ke")){
+      spaceStream >> word;
+      float x = std::atof(word);
+      matP->Ke[0] = x;
+      spaceStream >> word;
+      float y = std::atof(word);
+      matP->Ke[1] = y;
+      spaceStream >> word;
+      float z = std::atof(word);
+      matP->Ke[2] = z;
+    }
+    else if (!strcmp(word, "map_Kd")){
+      spaceStream >> word;
+      strcpy(mapKd, word);
+      matP->mapKd = mapKd;
+    }
+
+    mtlFile.getline(text, 256);
+  }
+
+  printf("%s\n", matP->name);
+  printf("%f\n", matP->Ns);
+  printf("%f\n", matP->Ni);
+  printf("%f\n", matP->d);
+  printf("%f %f\n", matP->Tr.x, matP->Tr.y);
+  printf("%f %f %f\n", matP->Tf[0], matP->Tf[1], matP->Tf[2]);
+  printf("%d\n", matP->illum);
+  printf("%f %f %f\n", matP->Ka[0], matP->Ka[1], matP->Ka[2]);
+  printf("%f %f %f\n", matP->Kd[0], matP->Kd[1], matP->Kd[2]);
+  printf("%f %f %f\n", matP->Ks[0], matP->Ks[1], matP->Ks[2]);
+  printf("%f %f %f\n", matP->Ke[0], matP->Ke[1], matP->Ke[2]);
+  printf("%s\n", matP->mapKd);
+
+  mtlFile.close();
 }
 
 /*
@@ -455,6 +604,8 @@ int main()
 
   int width  = 512;
   int height = 512;
+
+  parseMTL();
 
   //specifies callback function to handle GLFW errors
   glfwSetErrorCallback(glfwErrorFunction);
