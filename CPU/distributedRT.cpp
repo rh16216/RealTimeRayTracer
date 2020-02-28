@@ -165,17 +165,17 @@ void parseMTL(){
     strcpy(mapKd, "default mapKd");
     matP->mapKd = mapKd;
     while(text[0] && (strlen(text) != 1)){
-      printf("Loop 2: %s\n", text);
+      //printf("Loop 2: %s\n", text);
       //parse single material definition
       std::istringstream spaceStream(text);
       spaceStream >> word;
 
       if (!strcmp(word, "newmtl")){
-        printf("HERE?\n");
+        //printf("HERE?\n");
         spaceStream >> word;
-        printf("OR HERE?\n");
+        //printf("OR HERE?\n");
         strcpy(name, word);
-        printf("OR EVEN HERE?\n");
+        //printf("OR EVEN HERE?\n");
       }
 
       if (!strcmp(word, "Ns")){
@@ -265,7 +265,7 @@ void parseMTL(){
       mtlFile.getline(text, 256);
     }
     mtlFile.getline(text, 256);
-
+    /*
     printf("%s\n", matP->name);
     printf("%f\n", matP->Ns);
     printf("%f\n", matP->Ni);
@@ -278,6 +278,7 @@ void parseMTL(){
     printf("%f %f %f\n", matP->Ks[0], matP->Ks[1], matP->Ks[2]);
     printf("%f %f %f\n", matP->Ke[0], matP->Ke[1], matP->Ke[2]);
     printf("%s\n", matP->mapKd);
+    */
     materials[numMaterials] = matP;
     numMaterials = numMaterials+1;
   }
@@ -288,6 +289,56 @@ void parseMTL(){
     free(materials[j]->name);
     free(materials[j]->mapKd);
     free(materials[j]);
+  }
+}
+
+void parseOBJ(){
+  std::ifstream objFile("teapot.obj");
+  char text[256];
+  int vCount = 0;
+  int vtCount = 0;
+  int faceCount = 0;
+  char *word = (char *)malloc(256*sizeof(char));
+  while ((vCount < 10) || (vtCount < 10) || (faceCount < 10)){
+    objFile.getline(text, 256);
+    std::istringstream spaceStream(text);
+    spaceStream >> word;
+    if (!strcmp(word, "mtllib")){
+      spaceStream >> word;
+      printf("%s\n", word); //CALL parseMTL HERE!!!
+    }
+    if (!strcmp(word, "v")){
+      glm::vec3 v = glm::vec3(0.0f, 0.0f, 0.0f);
+      spaceStream >> word;
+      v.x = std::atof(word);
+      spaceStream >> word;
+      v.y = std::atof(word);
+      spaceStream >> word;
+      v.z = std::atof(word);
+      vCount = vCount + 1;
+      printf("v %d: %f %f %f\n", vCount, v.x, v.y, v.z);
+    }
+    if (!strcmp(word, "vt")){
+      glm::vec3 vt = glm::vec3(0.0f, 0.0f, 0.0f);
+      spaceStream >> word;
+      vt.x = std::atof(word);
+      spaceStream >> word;
+      vt.y = std::atof(word);
+      spaceStream >> word;
+      vt.z = std::atof(word);
+      vtCount = vtCount + 1;
+      printf("vt %d: %f %f %f\n", vtCount, vt.x, vt.y, vt.z);
+    }
+    if (!strcmp(word, "f")){
+      std::string digit;
+      for (int j = 0; j < 4; j++){
+        spaceStream >> word;
+        std::stringstream digitStream(word);
+        std::getline(digitStream, digit, '/');
+        std::cout << digit << std::endl;
+      }
+      faceCount = faceCount + 1;
+    }
   }
 }
 
@@ -625,6 +676,7 @@ int main()
   int height = 512;
 
   parseMTL();
+  parseOBJ();
 
   //specifies callback function to handle GLFW errors
   glfwSetErrorCallback(glfwErrorFunction);
