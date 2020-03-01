@@ -60,11 +60,14 @@ glm::vec3 cubeFaceColours[12] = {glm::vec3(255.0f, 0.0f, 0.0f), glm::vec3(0.0f, 
                                  glm::vec3(255.0f, 0.0f, 0.0f), glm::vec3(0.0f, 255.0f, 0.0f), glm::vec3(0.0f, 0.0f, 255.0f),
                                  glm::vec3(255.0f, 0.0f, 0.0f), glm::vec3(0.0f, 255.0f, 0.0f), glm::vec3(0.0f, 0.0f, 255.0f)};
 
-glm::vec3 lightPos = glm::vec3(1.5f, 1.5f, -3.0f);
+glm::vec3 lightPos = glm::vec3(0.0f, 1.0f, 0.0f);
+//glm::vec3 lightPos = glm::vec3(1.5f, 1.5f, -3.0f);
 glm::vec3 lightIntensity = 30.0f*glm::vec3(255.0f, 255.0f, 255.0f);
 float lightRadius = 0.5f;
-glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, -5.0f);
+glm::vec3 cameraPos = glm::vec3(0.0f, 1.0f, -2.5f);
 glm::vec3 cameraDir = glm::vec3(0.0f, 0.0f, 1.0f);
+//glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, -5.0f);
+//glm::vec3 cameraDir = glm::vec3(0.0f, 0.0f, 1.0f);
 float yaw = 0;
 
 
@@ -143,7 +146,7 @@ struct material{
 };
 
 void parseMTL(){
-  std::ifstream mtlFile("sportsCar.mtl");
+  std::ifstream mtlFile("CornellBox-Empty-RG.mtl");
   char text[256];
   mtlFile.getline(text, 256);
   while ((text[0] == '#') || isspace(text[0]) || !text[0]){
@@ -264,7 +267,9 @@ void parseMTL(){
 
       mtlFile.getline(text, 256);
     }
-    mtlFile.getline(text, 256);
+    while(strlen(text) == 1){
+      mtlFile.getline(text, 256);
+    }
     /*
     printf("%s\n", matP->name);
     printf("%f\n", matP->Ns);
@@ -292,14 +297,15 @@ void parseMTL(){
   }
 }
 
-void parseOBJ(){
-  std::ifstream objFile("teapot.obj");
+void parseOBJ(std::vector<glm::vec3> &vertices, std::vector<glm::vec3> &triangles){
+  std::ifstream objFile("CornellBox-Empty-RG.obj");
   char text[256];
   int vCount = 0;
   int vtCount = 0;
   int faceCount = 0;
   char *word = (char *)malloc(256*sizeof(char));
-  while ((vCount < 10) || (vtCount < 10) || (faceCount < 10)){
+  char *name = (char *)malloc(256*sizeof(char));
+  while ((vCount < 10) || (faceCount < 6)){
     objFile.getline(text, 256);
     std::istringstream spaceStream(text);
     spaceStream >> word;
@@ -315,8 +321,8 @@ void parseOBJ(){
       v.y = std::atof(word);
       spaceStream >> word;
       v.z = std::atof(word);
+      vertices.push_back(v);
       vCount = vCount + 1;
-      printf("v %d: %f %f %f\n", vCount, v.x, v.y, v.z);
     }
     if (!strcmp(word, "vt")){
       glm::vec3 vt = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -329,13 +335,68 @@ void parseOBJ(){
       vtCount = vtCount + 1;
       printf("vt %d: %f %f %f\n", vtCount, vt.x, vt.y, vt.z);
     }
+    if (!strcmp(word, "g")){
+      spaceStream >> word;
+      strcpy(name, word);
+      printf("NEW GEOMETRY: %s\n", name);
+    }
+    if (!strcmp(word, "usemtl")){
+      spaceStream >> word;
+      printf("material for geometry %s is %s \n", name, word);
+    }
     if (!strcmp(word, "f")){
       std::string digit;
+      printf("face for geometry %s\n", name);
+      std::vector<int> faceIndices;
       for (int j = 0; j < 4; j++){
         spaceStream >> word;
         std::stringstream digitStream(word);
         std::getline(digitStream, digit, '/');
-        std::cout << digit << std::endl;
+        int idigit = std::stoi(digit);
+        if (idigit < 0){
+          idigit = vertices.size() + idigit;
+        }
+        printf("%d\n", idigit);
+        printf("%f %f %f\n", vertices[idigit].x, vertices[idigit].y, vertices[idigit].z);
+        faceIndices.push_back(idigit);
+      }
+      //TODO: convert to work generally, not just when aligned with world coordinates
+      int index0 = 0;
+      int index1 = 1;
+      bool found = false;
+      while(index0 < faceIndices.size() && index1 < faceIndices.size() && !found){
+        int faceIndex0 = faceIndices[index0];
+        int faceIndex1 = faceIndices[index1];
+        glm::vec3 vertex0 = vertices[faceIndex0];
+        glm::vec3 vertex1 = vertices[faceIndex1];
+        int dimMatch = 0;
+        if (vertex0.x == vertex1.x) dimMatch = dimMatch + 1;
+        if (vertex0.y == vertex1.y) dimMatch = dimMatch + 1;
+        if (vertex0.z == vertex1.z) dimMatch = dimMatch + 1;
+        if (dimMatch < 2){
+          std::vector<int> triFaceIndices0;
+          std::vector<int> triFaceIndices1;
+          for (int i = 0; i < faceIndices.size(); i++){
+            triFaceIndices0.push_back(faceIndices[i]);
+            triFaceIndices1.push_back(faceIndices[i]);
+          }
+          triFaceIndices0.erase(triFaceIndices0.begin()+index0);
+          triFaceIndices1.erase(triFaceIndices1.begin()+index1);
+          triangles.push_back(glm::vec3(triFaceIndices0[0], triFaceIndices0[1], triFaceIndices0[2]));
+          triangles.push_back(glm::vec3(triFaceIndices1[0], triFaceIndices1[1], triFaceIndices1[2]));
+          found = true;
+        }
+        else{
+          index1 = index1 + 1;
+          if ((index0 == faceIndices.size()-1) && (index0 == faceIndices.size())){
+            printf("Didn't find matching vertices. \n");
+          }
+          else if (index1 == faceIndices.size()){
+            index0 = index0 + 1;
+            index1 = index0 + 1;
+          }
+        }
+
       }
       faceCount = faceCount + 1;
     }
@@ -349,7 +410,7 @@ void parseOBJ(){
  *
  * Scenes, like devices, are reference-counted.
  */
-RTCScene initializeScene(RTCDevice device)
+RTCScene initializeScene(RTCDevice device, std::vector<glm::vec3> &vertices, std::vector<glm::vec3> &triangles)
 {
   RTCScene scene = rtcNewScene(device);
 
@@ -363,6 +424,44 @@ RTCScene initializeScene(RTCDevice device)
    * to ensure proper alignment and padding. This is described in
    * more detail in the API documentation.
    */
+
+   RTCGeometry obj = rtcNewGeometry(device, RTC_GEOMETRY_TYPE_TRIANGLE);
+   float* objVertices = (float*) rtcSetNewGeometryBuffer(obj,
+                                                      RTC_BUFFER_TYPE_VERTEX,
+                                                      0,
+                                                      RTC_FORMAT_FLOAT3,
+                                                      3*sizeof(float),
+                                                      vertices.size());
+
+   unsigned* objIndices = (unsigned*) rtcSetNewGeometryBuffer(obj,
+                                                           RTC_BUFFER_TYPE_INDEX,
+                                                           0,
+                                                           RTC_FORMAT_UINT3,
+                                                           3*sizeof(unsigned),
+                                                           triangles.size());
+
+   if (objVertices && objIndices)
+   {
+     for (int vertex = 0; vertex < vertices.size(); vertex++){
+       objVertices[3*vertex] = vertices[vertex].x;
+       objVertices[3*vertex + 1] = vertices[vertex].y;
+       objVertices[3*vertex + 2] = -1.0f * vertices[vertex].z;
+     }
+
+     for (int index = 0; index < triangles.size(); index++){
+       objIndices[3*index] = triangles[index].x;
+       objIndices[3*index + 1] = triangles[index].y;
+       objIndices[3*index + 2] = triangles[index].z;
+     }
+
+   }
+
+   rtcCommitGeometry(obj);
+   rtcAttachGeometry(scene, obj);
+   rtcReleaseGeometry(obj);
+
+  /*
+
   RTCGeometry ground = rtcNewGeometry(device, RTC_GEOMETRY_TYPE_TRIANGLE);
   float* groundVertices = (float*) rtcSetNewGeometryBuffer(ground,
                                                      RTC_BUFFER_TYPE_VERTEX,
@@ -380,7 +479,7 @@ RTCScene initializeScene(RTCDevice device)
 
 
 
-  /* create face and vertex color arrays */
+  // create face and vertex color arrays
   //groundVertexColours = (glm::vec3*) alignedMalloc(4*sizeof(glm::vec3),16);
 
   // For buffer, need to be array of values  rather than vec3
@@ -404,21 +503,19 @@ RTCScene initializeScene(RTCDevice device)
     //groundFaceColours[1] = glm::vec3(128,128,128);
   }
 
-  /*
-   * You must commit geometry objects when you are done setting them up,
-   * or you will not get any intersections.
-   */
+   // You must commit geometry objects when you are done setting them up,
+   // or you will not get any intersections.
+
   rtcCommitGeometry(ground);
 
-  /*
-   * In rtcAttachGeometry(...), the scene takes ownership of the geom
-   * by increasing its reference count. This means that we don't have
-   * to hold on to the geom handle, and may release it. The geom object
-   * will be released automatically when the scene is destroyed.
-   *
-   * rtcAttachGeometry() returns a geometry ID. We could use this to
-   * identify intersected objects later on.
-   */
+   // In rtcAttachGeometry(...), the scene takes ownership of the geom
+   // by increasing its reference count. This means that we don't have
+   // to hold on to the geom handle, and may release it. The geom object
+   // will be released automatically when the scene is destroyed.
+   //
+   //rtcAttachGeometry() returns a geometry ID. We could use this to
+   //identify intersected objects later on.
+
   rtcAttachGeometry(scene, ground);
   rtcReleaseGeometry(ground);
 
@@ -470,11 +567,13 @@ RTCScene initializeScene(RTCDevice device)
   rtcAttachGeometry(scene, cube);
   rtcReleaseGeometry(cube);
 
-
+  */
   /*
    * Like geometry objects, scenes must be committed. This lets
    * Embree know that it may start building an acceleration structure.
    */
+
+
   rtcCommitScene(scene);
 
   return scene;
@@ -524,7 +623,7 @@ struct RTCRayHit castRay(RTCScene scene, glm::vec3 origin, glm::vec3 direction)
 }
 
 
-bool castShadowRay(RTCScene scene, glm::vec3 origin, glm::vec3 direction)
+bool castShadowRay(RTCScene scene, glm::vec3 origin, glm::vec3 direction, float maxDist)
 {
   /*
    * The intersect context can be used to set intersection
@@ -547,7 +646,8 @@ bool castShadowRay(RTCScene scene, glm::vec3 origin, glm::vec3 direction)
   ray.dir_y = direction.y;
   ray.dir_z = direction.z;
   ray.tnear = 0;
-  ray.tfar = std::numeric_limits<float>::infinity();
+  //change tfar to account for inside scenes
+  ray.tfar = maxDist;
   ray.mask = 0;
   ray.flags = 0;
 
@@ -557,7 +657,7 @@ bool castShadowRay(RTCScene scene, glm::vec3 origin, glm::vec3 direction)
    */
   rtcOccluded1(scene, &context, &ray);
   //printf("%f, %f, %f: ", ox, oy, oz);
-  if (ray.tfar == std::numeric_limits<float>::infinity())
+  if (ray.tfar == maxDist)
   {
     //did not find intersection
     return false;
@@ -618,8 +718,9 @@ glm::vec3 diffuseIndirectLambert(RTCScene scene, glm::vec3 geomNormal, glm::vec3
     glm::vec3 newIntersectionPos = intersectionPos + 0.01f*geomNormal;
     struct RTCRayHit indirectRayhit = castRay(scene, newIntersectionPos, normSpaceRandvec);
     if (indirectRayhit.hit.geomID != RTC_INVALID_GEOMETRY_ID) {
-      if (indirectRayhit.hit.geomID == 0) indirectGeomColour = groundFaceColours[(int)indirectRayhit.hit.primID+1];
-      if (indirectRayhit.hit.geomID == 1) indirectGeomColour = cubeFaceColours[(int)indirectRayhit.hit.primID+1];
+      //if (indirectRayhit.hit.geomID == 0) indirectGeomColour = groundFaceColours[(int)indirectRayhit.hit.primID+1];
+      //if (indirectRayhit.hit.geomID == 1) indirectGeomColour = cubeFaceColours[(int)indirectRayhit.hit.primID+1];
+      indirectGeomColour = glm::vec3(0.0f, 0.0f, 255.0f);
       glm::vec3 indirectGeomIntensity = indirectGeomColour/(4.0f*3.14f*(float)pow(indirectRayhit.ray.tfar,2));
       diffuseIndirect = diffuseIndirect + indirectGeomIntensity*std::max(glm::dot(geomNormal, normSpaceRandvec), 0.0f);
     }
@@ -654,9 +755,10 @@ float softShadows(RTCScene scene, glm::vec3 shadowDir, glm::vec3 intersectionPos
     float sample1 = d(generator);
     glm::vec3 sampleLightPos = lightPos + lightRadius*(sample0*perpVec0+sample1*perpVec1);
     glm::vec3 sampleShadowDir = sampleLightPos-intersectionPos;
+    float maxDist = glm::length(sampleShadowDir);
     sampleShadowDir = glm::normalize(sampleShadowDir);
     intersectionPos = intersectionPos + 0.01f*shadowDir;
-    if (castShadowRay(scene, intersectionPos, sampleShadowDir)) numIntersects++;
+    if (castShadowRay(scene, intersectionPos, sampleShadowDir, maxDist)) numIntersects++;
   }
   float shadowFraction = (float)numIntersects/(float)numRays;
 
@@ -667,16 +769,19 @@ float softShadows(RTCScene scene, glm::vec3 shadowDir, glm::vec3 intersectionPos
 
 int main()
 {
+  std::vector<glm::vec3> vertices;
+  std::vector<glm::vec3> triangles;
+
+  parseMTL();
+  parseOBJ(vertices, triangles);
+
   /* Initialization. All of this may fail, but we will be notified by
    * our errorFunction. */
   RTCDevice device = initializeDevice();
-  RTCScene scene = initializeScene(device);
+  RTCScene scene = initializeScene(device, vertices, triangles);
 
   int width  = 512;
   int height = 512;
-
-  parseMTL();
-  parseOBJ();
 
   //specifies callback function to handle GLFW errors
   glfwSetErrorCallback(glfwErrorFunction);
@@ -729,18 +834,22 @@ int main()
         if ((i == fheight/2) and (j == fwidth/2)) cameraDir = rayDir; // try remove this if to make faster??
 
         struct RTCRayHit rayhit = castRay(scene, cameraPos, rayDir);
-        glm::vec3 geomColour = glm::vec3(0.0f, 0.0f, 0.0f);
+        glm::vec3 geomColour = glm::vec3(128.0f, 0.0f, 0.0f);
         glm::vec3 colour = geomColour;
         glm::vec3 ambientLight = glm::vec3(50.0f, 50.0f, 50.0f);
         if (rayhit.hit.geomID != RTC_INVALID_GEOMETRY_ID) {
-          if (rayhit.hit.geomID == 0) geomColour = groundFaceColours[(int)rayhit.hit.primID+1];
-          if (rayhit.hit.geomID == 1) geomColour = cubeFaceColours[(int)rayhit.hit.primID+1];
+          geomColour = glm::vec3(0.0f, 255.0f, 0.0f);
+          //if (rayhit.hit.geomID == 0) geomColour = groundFaceColours[(int)rayhit.hit.primID+1];
+          //if (rayhit.hit.geomID == 1) geomColour = cubeFaceColours[(int)rayhit.hit.primID+1];
           glm::vec3 intersectionPos = cameraPos + rayhit.ray.tfar*rayDir;
           glm::vec3 shadowDir = lightPos-intersectionPos;
           float rsquared = (float)pow(glm::length(shadowDir), 2);
           glm::vec3 incidentLight = lightIntensity/(4.0f*3.14f*rsquared);
-          glm::vec3 geomNormal = glm::normalize(glm::vec3(rayhit.hit.Ng_x, rayhit.hit.Ng_y, rayhit.hit.Ng_z));
+          //printf("incidentLight: %f %f %f \n", incidentLight.x, incidentLight.y, incidentLight.z);
+          //inverted normals for Cornell??
+          glm::vec3 geomNormal = -1.0f*glm::normalize(glm::vec3(rayhit.hit.Ng_x, rayhit.hit.Ng_y, rayhit.hit.Ng_z));
           shadowDir = glm::normalize(shadowDir);
+          //printf("dot: %f \n", glm::dot(geomNormal, shadowDir));
           glm::vec3 diffuseDirect = (ambientLight + incidentLight)*geomColour/255.0f*std::max(glm::dot(geomNormal, shadowDir), 0.0f);
 
 
@@ -749,13 +858,12 @@ int main()
           glm::vec3 specularDirect = specularDirectPhong(intersectionPos, geomNormal, incidentLight);
 
           colour = diffuseDirect + diffuseIndirect + specularDirect;
-          //colour = specularDirect;
 
           float shadowFraction = softShadows(scene, shadowDir, intersectionPos);
           colour = colour * (1-shadowFraction);
 
         }
-        data[i][j][0] = std::min(255.0f, colour.x) * 256 * 256 * 256;
+        data[i][j][0] = std::min(255.0f,colour.x) * 256 * 256 * 256;
         data[i][j][1] = std::min(255.0f, colour.y) * 256 * 256 * 256;
         data[i][j][2] = std::min(255.0f, colour.z) * 256 * 256 * 256;
       }
