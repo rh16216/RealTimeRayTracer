@@ -360,44 +360,28 @@ void parseOBJ(std::vector<glm::vec3> &vertices, std::vector<glm::vec3> &triangle
         printf("%f %f %f\n", vertices[idigit].x, vertices[idigit].y, vertices[idigit].z);
         faceIndices.push_back(idigit);
       }
-      //TODO: convert to work generally, not just when aligned with world coordinates
-      int index0 = 0;
-      int index1 = 1;
-      bool found = false;
-      while(index0 < faceIndices.size() && index1 < faceIndices.size() && !found){
-        int faceIndex0 = faceIndices[index0];
-        int faceIndex1 = faceIndices[index1];
-        glm::vec3 vertex0 = vertices[faceIndex0];
-        glm::vec3 vertex1 = vertices[faceIndex1];
-        int dimMatch = 0;
-        if (vertex0.x == vertex1.x) dimMatch = dimMatch + 1;
-        if (vertex0.y == vertex1.y) dimMatch = dimMatch + 1;
-        if (vertex0.z == vertex1.z) dimMatch = dimMatch + 1;
-        if (dimMatch < 2){
-          std::vector<int> triFaceIndices0;
-          std::vector<int> triFaceIndices1;
-          for (int i = 0; i < faceIndices.size(); i++){
-            triFaceIndices0.push_back(faceIndices[i]);
-            triFaceIndices1.push_back(faceIndices[i]);
-          }
-          triFaceIndices0.erase(triFaceIndices0.begin()+index0);
-          triFaceIndices1.erase(triFaceIndices1.begin()+index1);
-          triangles.push_back(glm::vec3(triFaceIndices0[0], triFaceIndices0[1], triFaceIndices0[2]));
-          triangles.push_back(glm::vec3(triFaceIndices1[0], triFaceIndices1[1], triFaceIndices1[2]));
-          found = true;
+      float maxLength = 0.0f;
+      int maxIndex = 0;
+      glm::vec3 vertex0 = vertices[faceIndices[0]];
+      for (int k = 0; k < 3; k++){
+        float vecLength = glm::length(vertices[faceIndices[k]]-vertex0);
+        if (vecLength > maxLength){
+          maxLength = vecLength;
+          maxIndex = k;
         }
-        else{
-          index1 = index1 + 1;
-          if ((index0 == faceIndices.size()-1) && (index0 == faceIndices.size())){
-            printf("Didn't find matching vertices. \n");
-          }
-          else if (index1 == faceIndices.size()){
-            index0 = index0 + 1;
-            index1 = index0 + 1;
-          }
-        }
-
       }
+
+      std::vector<int> triFaceIndices0;
+      std::vector<int> triFaceIndices1;
+      for (int i = 0; i < faceIndices.size(); i++){
+        triFaceIndices0.push_back(faceIndices[i]);
+        triFaceIndices1.push_back(faceIndices[i]);
+      }
+      triFaceIndices0.erase(triFaceIndices0.begin());
+      triFaceIndices1.erase(triFaceIndices1.begin()+maxIndex);
+      triangles.push_back(glm::vec3(triFaceIndices0[0], triFaceIndices0[1], triFaceIndices0[2]));
+      triangles.push_back(glm::vec3(triFaceIndices1[0], triFaceIndices1[1], triFaceIndices1[2]));
+
       faceCount = faceCount + 1;
     }
   }
