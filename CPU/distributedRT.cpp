@@ -297,21 +297,23 @@ void parseMTL(){
   }
 }
 
-void parseOBJ(std::vector<glm::vec3> &vertices, std::vector<glm::vec3> &triangles){
+void parseOBJ(std::vector<glm::vec3> &vertices, std::vector<glm::vec3> &triangles, std::vector<int> &triGeomBreaks, std::vector<int> &vertGeomBreaks ){
   std::ifstream objFile("CornellBox-Empty-RG.obj");
   char text[256];
   int vCount = 0;
   int vtCount = 0;
-  int faceCount = 0;
+  int triCount = 0;
+  triGeomBreaks.push_back(0);
+  vertGeomBreaks.push_back(0);
   char *word = (char *)malloc(256*sizeof(char));
   char *name = (char *)malloc(256*sizeof(char));
-  while ((vCount < 10) || (faceCount < 6)){
+  while ((vCount < 10) || (triCount < 12)){
     objFile.getline(text, 256);
     std::istringstream spaceStream(text);
     spaceStream >> word;
     if (!strcmp(word, "mtllib")){
       spaceStream >> word;
-      printf("%s\n", word); //CALL parseMTL HERE!!!
+      //printf("%s\n", word); //CALL parseMTL HERE!!!
     }
     if (!strcmp(word, "v")){
       glm::vec3 v = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -338,15 +340,17 @@ void parseOBJ(std::vector<glm::vec3> &vertices, std::vector<glm::vec3> &triangle
     if (!strcmp(word, "g")){
       spaceStream >> word;
       strcpy(name, word);
-      printf("NEW GEOMETRY: %s\n", name);
+      //printf("NEW GEOMETRY: %s\n", name);
+      triGeomBreaks.push_back(triCount+2);
+      vertGeomBreaks.push_back(vCount);
     }
     if (!strcmp(word, "usemtl")){
       spaceStream >> word;
-      printf("material for geometry %s is %s \n", name, word);
+      //printf("material for geometry %s is %s \n", name, word);
     }
     if (!strcmp(word, "f")){
       std::string digit;
-      printf("face for geometry %s\n", name);
+      //printf("face for geometry %s\n", name);
       std::vector<int> faceIndices;
       for (int j = 0; j < 4; j++){
         spaceStream >> word;
@@ -356,8 +360,8 @@ void parseOBJ(std::vector<glm::vec3> &vertices, std::vector<glm::vec3> &triangle
         if (idigit < 0){
           idigit = vertices.size() + idigit;
         }
-        printf("%d\n", idigit);
-        printf("%f %f %f\n", vertices[idigit].x, vertices[idigit].y, vertices[idigit].z);
+        //printf("%d\n", idigit);
+        //printf("%f %f %f\n", vertices[idigit].x, vertices[idigit].y, vertices[idigit].z);
         faceIndices.push_back(idigit);
       }
       float maxLength = 0.0f;
@@ -382,7 +386,7 @@ void parseOBJ(std::vector<glm::vec3> &vertices, std::vector<glm::vec3> &triangle
       triangles.push_back(glm::vec3(triFaceIndices0[0], triFaceIndices0[1], triFaceIndices0[2]));
       triangles.push_back(glm::vec3(triFaceIndices1[0], triFaceIndices1[1], triFaceIndices1[2]));
 
-      faceCount = faceCount + 1;
+      triCount = triCount + 2;
     }
   }
 }
@@ -394,7 +398,7 @@ void parseOBJ(std::vector<glm::vec3> &vertices, std::vector<glm::vec3> &triangle
  *
  * Scenes, like devices, are reference-counted.
  */
-RTCScene initializeScene(RTCDevice device, std::vector<glm::vec3> &vertices, std::vector<glm::vec3> &triangles)
+RTCScene initializeScene(RTCDevice device, std::vector<glm::vec3> &vertices, std::vector<glm::vec3> &triangles, std::vector<int> &triGeomBreaks, std::vector<int> &vertGeomBreaks)
 {
   RTCScene scene = rtcNewScene(device);
 
@@ -409,41 +413,44 @@ RTCScene initializeScene(RTCDevice device, std::vector<glm::vec3> &vertices, std
    * more detail in the API documentation.
    */
 
-   RTCGeometry obj = rtcNewGeometry(device, RTC_GEOMETRY_TYPE_TRIANGLE);
-   float* objVertices = (float*) rtcSetNewGeometryBuffer(obj,
-                                                      RTC_BUFFER_TYPE_VERTEX,
-                                                      0,
-                                                      RTC_FORMAT_FLOAT3,
-                                                      3*sizeof(float),
-                                                      vertices.size());
+   for (int i = 0; i < vertGeomBreaks.size()-1; i++){
+     int vertSize = vertGeomBreaks[i+1]-vertGeomBreaks[i];
+     int triSize = vertGeomBreaks[i+1]-vertGeomBreaks[i];
+     RTCGeometry obj = rtcNewGeometry(device, RTC_GEOMETRY_TYPE_TRIANGLE);
+     float* objVertices = (float*) rtcSetNewGeometryBuffer(obj,
+                                                        RTC_BUFFER_TYPE_VERTEX,
+                                                        0,
+                                                        RTC_FORMAT_FLOAT3,
+                                                        3*sizeof(float),
+                                                        vertices.size());
 
-   unsigned* objIndices = (unsigned*) rtcSetNewGeometryBuffer(obj,
-                                                           RTC_BUFFER_TYPE_INDEX,
-                                                           0,
-                                                           RTC_FORMAT_UINT3,
-                                                           3*sizeof(unsigned),
-                                                           triangles.size());
+     unsigned* objIndices = (unsigned*) rtcSetNewGeometryBuffer(obj,
+                                                            RTC_BUFFER_TYPE_INDEX,
+                                                            0,
+                                                            RTC_FORMAT_UINT3,
+                                                            3*sizeof(unsigned),
+                                                            triangles.size());
 
-   if (objVertices && objIndices)
-   {
-     for (int vertex = 0; vertex < vertices.size(); vertex++){
-       objVertices[3*vertex] = vertices[vertex].x;
-       objVertices[3*vertex + 1] = vertices[vertex].y;
-       objVertices[3*vertex + 2] = -1.0f * vertices[vertex].z;
-     }
+    if (objVertices && objIndices)
+    {
+      for (int vertex = vertGeomBreaks[i]; vertex < vertGeomBreaks[i+1]; vertex++){
+        objVertices[3*vertex] = vertices[vertex].x;
+        objVertices[3*vertex + 1] = vertices[vertex].y;
+        objVertices[3*vertex + 2] = -1.0f * vertices[vertex].z;
+      }
 
-     for (int index = 0; index < triangles.size(); index++){
-       objIndices[3*index] = triangles[index].x;
-       objIndices[3*index + 1] = triangles[index].y;
-       objIndices[3*index + 2] = triangles[index].z;
-     }
+      for (int index = triGeomBreaks[i]; index < triGeomBreaks[i+1]; index++){
+        objIndices[3*index] = triangles[index].x;
+        objIndices[3*index + 1] = triangles[index].y;
+        objIndices[3*index + 2] = triangles[index].z;
+      }
 
-   }
+    }
 
-   rtcCommitGeometry(obj);
-   rtcAttachGeometry(scene, obj);
-   rtcReleaseGeometry(obj);
-
+    rtcCommitGeometry(obj);
+    rtcAttachGeometry(scene, obj);
+    rtcReleaseGeometry(obj);
+  }
   /*
 
   RTCGeometry ground = rtcNewGeometry(device, RTC_GEOMETRY_TYPE_TRIANGLE);
@@ -755,14 +762,16 @@ int main()
 {
   std::vector<glm::vec3> vertices;
   std::vector<glm::vec3> triangles;
+  std::vector<int> triGeomBreaks;
+  std::vector<int> vertGeomBreaks;
 
   parseMTL();
-  parseOBJ(vertices, triangles);
+  parseOBJ(vertices, triangles, triGeomBreaks, vertGeomBreaks);
 
   /* Initialization. All of this may fail, but we will be notified by
    * our errorFunction. */
   RTCDevice device = initializeDevice();
-  RTCScene scene = initializeScene(device, vertices, triangles);
+  RTCScene scene = initializeScene(device, vertices, triangles, triGeomBreaks, vertGeomBreaks);
 
   int width  = 512;
   int height = 512;
@@ -822,7 +831,7 @@ int main()
         glm::vec3 colour = geomColour;
         glm::vec3 ambientLight = glm::vec3(50.0f, 50.0f, 50.0f);
         if (rayhit.hit.geomID != RTC_INVALID_GEOMETRY_ID) {
-          geomColour = glm::vec3(0.0f, 255.0f, 0.0f);
+          geomColour = ((float)rayhit.hit.geomID)*glm::vec3(0.0f, 40.0f, 0.0f);
           //if (rayhit.hit.geomID == 0) geomColour = groundFaceColours[(int)rayhit.hit.primID+1];
           //if (rayhit.hit.geomID == 1) geomColour = cubeFaceColours[(int)rayhit.hit.primID+1];
           glm::vec3 intersectionPos = cameraPos + rayhit.ray.tfar*rayDir;
