@@ -62,7 +62,8 @@ glm::vec3 cubeFaceColours[12] = {glm::vec3(255.0f, 0.0f, 0.0f), glm::vec3(0.0f, 
 
 glm::vec3 lightPos = glm::vec3(0.0f, 1.0f, 0.0f);
 //glm::vec3 lightPos = glm::vec3(1.5f, 1.5f, -3.0f);
-glm::vec3 lightIntensity = 30.0f*glm::vec3(255.0f, 255.0f, 255.0f);
+//glm::vec3 lightIntensity = 30.0f*glm::vec3(255.0f, 255.0f, 255.0f);
+glm::vec3 lightIntensity = 7.5f*glm::vec3(255.0f, 255.0f, 255.0f);
 float lightRadius = 0.5f;
 glm::vec3 cameraPos = glm::vec3(0.0f, 1.0f, -2.5f);
 glm::vec3 cameraDir = glm::vec3(0.0f, 0.0f, 1.0f);
@@ -136,16 +137,16 @@ struct material{
   float Ni;
   float d;
   glm::vec2 Tr;
-  float Tf[3];
+  glm::vec3 Tf;
   int illum;
-  float Ka[3];
-  float Kd[3];
-  float Ks[3];
-  float Ke[3];
+  glm::vec3 Ka;
+  glm::vec3 Kd;
+  glm::vec3 Ks;
+  glm::vec3 Ke;
   char *mapKd;
 };
 
-void parseMTL(){
+int parseMTL(struct material **materials){
   std::ifstream mtlFile("CornellBox-Empty-RG.mtl");
   char text[256];
   mtlFile.getline(text, 256);
@@ -154,7 +155,6 @@ void parseMTL(){
     //parse comments at top
     mtlFile.getline(text, 256);
   }
-  struct material *materials[100];
   int numMaterials = 0;
   while(text[0]){
     //struct material newMaterial = {"name", 0.0f, 0.0f, 0.0f, glm::vec2(0.0f, 0.0f), {0.0f,0.0f,0.0f}, 1, {0.0f,0.0f,0.0f},{0.0f,0.0f,0.0f},{0.0f,0.0f,0.0f},{0.0f,0.0f,0.0f}, "map"};
@@ -204,13 +204,11 @@ void parseMTL(){
       else if (!strcmp(word, "Tf")){
         spaceStream >> word;
         float x = std::atof(word);
-        matP->Tf[0] = x;
         spaceStream >> word;
         float y = std::atof(word);
-        matP->Tf[1] = y;
         spaceStream >> word;
         float z = std::atof(word);
-        matP->Tf[2] = z;
+        matP->Tf = glm::vec3(x, y, z);
       }
       else if (!strcmp(word, "illum")){
         spaceStream >> word;
@@ -219,46 +217,38 @@ void parseMTL(){
       else if (!strcmp(word, "Ka")){
         spaceStream >> word;
         float x = std::atof(word);
-        matP->Ka[0] = x;
         spaceStream >> word;
         float y = std::atof(word);
-        matP->Ka[1] = y;
         spaceStream >> word;
         float z = std::atof(word);
-        matP->Ka[2] = z;
+        matP->Ka = glm::vec3(x, y, z);
       }
       else if (!strcmp(word, "Kd")){
         spaceStream >> word;
         float x = std::atof(word);
-        matP->Kd[0] = x;
         spaceStream >> word;
         float y = std::atof(word);
-        matP->Kd[1] = y;
         spaceStream >> word;
         float z = std::atof(word);
-        matP->Kd[2] = z;
+        matP->Kd = glm::vec3(x, y, z);
       }
       else if (!strcmp(word, "Ks")){
         spaceStream >> word;
         float x = std::atof(word);
-        matP->Ks[0] = x;
         spaceStream >> word;
         float y = std::atof(word);
-        matP->Ks[1] = y;
         spaceStream >> word;
         float z = std::atof(word);
-        matP->Ks[2] = z;
+        matP->Ks = glm::vec3(x, y, z);
       }
       else if (!strcmp(word, "Ke")){
         spaceStream >> word;
         float x = std::atof(word);
-        matP->Ke[0] = x;
         spaceStream >> word;
         float y = std::atof(word);
-        matP->Ke[1] = y;
         spaceStream >> word;
         float z = std::atof(word);
-        matP->Ke[2] = z;
+        matP->Ke = glm::vec3(x, y, z);
       }
       else if (!strcmp(word, "map_Kd")){
         spaceStream >> word;
@@ -270,6 +260,7 @@ void parseMTL(){
     while(strlen(text) == 1){
       mtlFile.getline(text, 256);
     }
+
     /*
     printf("%s\n", matP->name);
     printf("%f\n", matP->Ns);
@@ -284,20 +275,16 @@ void parseMTL(){
     printf("%f %f %f\n", matP->Ke[0], matP->Ke[1], matP->Ke[2]);
     printf("%s\n", matP->mapKd);
     */
+
     materials[numMaterials] = matP;
     numMaterials = numMaterials+1;
   }
   mtlFile.close();
 
-  for (int j = 0; j < numMaterials; j++){
-    printf("material %d: %s\n", j, materials[j]->name);
-    free(materials[j]->name);
-    free(materials[j]->mapKd);
-    free(materials[j]);
-  }
+  return numMaterials;
 }
 
-void parseOBJ(std::vector<glm::vec3> &vertices, std::vector<glm::vec3> &triangles, std::vector<int> &triGeomBreaks, std::vector<int> &vertGeomBreaks ){
+void parseOBJ(std::vector<glm::vec3> &vertices, std::vector<glm::vec3> &triangles, std::vector<int> &triGeomBreaks, std::vector<int> &vertGeomBreaks, struct material **materials, int numMaterials ){
   std::ifstream objFile("CornellBox-Empty-RG.obj");
   char text[256];
   int vCount = 0;
@@ -346,6 +333,14 @@ void parseOBJ(std::vector<glm::vec3> &vertices, std::vector<glm::vec3> &triangle
     }
     if (!strcmp(word, "usemtl")){
       spaceStream >> word;
+      for (int mat = 0; mat < numMaterials; mat++){
+        if (!strcmp(word, materials[mat]->name)){
+          int geomIndex = vCount/4-1;
+          struct material *temp = materials[mat];
+          materials[mat] = materials[geomIndex];
+          materials[geomIndex] = temp;
+        }
+      }
       //printf("material for geometry %s is %s \n", name, word);
     }
     if (!strcmp(word, "f")){
@@ -686,7 +681,7 @@ glm::vec3 findRayDir(float fwidth, float fheight, int i, int j, glm::mat3 rotate
 }
 
 
-glm::vec3 diffuseIndirectLambert(RTCScene scene, glm::vec3 geomNormal, glm::vec3 geomColour, glm::vec3 intersectionPos){
+glm::vec3 diffuseIndirectLambert(RTCScene scene, glm::vec3 geomNormal, glm::vec3 geomColour, glm::vec3 intersectionPos, struct material **materials){
   std::uniform_real_distribution<float> u(0.0, 1.0);
   std::default_random_engine ugenerator;
   glm::vec3 diffuseIndirect = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -711,7 +706,7 @@ glm::vec3 diffuseIndirectLambert(RTCScene scene, glm::vec3 geomNormal, glm::vec3
     if (indirectRayhit.hit.geomID != RTC_INVALID_GEOMETRY_ID) {
       //if (indirectRayhit.hit.geomID == 0) indirectGeomColour = groundFaceColours[(int)indirectRayhit.hit.primID+1];
       //if (indirectRayhit.hit.geomID == 1) indirectGeomColour = cubeFaceColours[(int)indirectRayhit.hit.primID+1];
-      indirectGeomColour = glm::vec3(0.0f, 0.0f, 255.0f);
+      indirectGeomColour = materials[indirectRayhit.hit.geomID]->Ka;
       glm::vec3 indirectGeomIntensity = indirectGeomColour/(4.0f*3.14f*(float)pow(indirectRayhit.ray.tfar,2));
       diffuseIndirect = diffuseIndirect + indirectGeomIntensity*std::max(glm::dot(geomNormal, normSpaceRandvec), 0.0f);
     }
@@ -723,8 +718,7 @@ glm::vec3 diffuseIndirectLambert(RTCScene scene, glm::vec3 geomNormal, glm::vec3
 }
 
 
-glm::vec3 specularDirectPhong(glm::vec3 intersectionPos, glm::vec3 geomNormal, glm::vec3 incidentLight){
-  float n = 64.0f;
+glm::vec3 specularDirectPhong(glm::vec3 intersectionPos, glm::vec3 geomNormal, glm::vec3 incidentLight, float n){
   glm::vec3 L = glm::normalize(lightPos-intersectionPos);
   glm::vec3 V = glm::normalize(cameraPos-intersectionPos);
   glm::vec3 halfVector = glm::normalize((L+V)/2.0f);
@@ -765,8 +759,11 @@ int main()
   std::vector<int> triGeomBreaks;
   std::vector<int> vertGeomBreaks;
 
-  parseMTL();
-  parseOBJ(vertices, triangles, triGeomBreaks, vertGeomBreaks);
+  struct material *materials[100];
+
+  int numMaterials = parseMTL(materials);
+
+  parseOBJ(vertices, triangles, triGeomBreaks, vertGeomBreaks, materials, numMaterials);
 
   /* Initialization. All of this may fail, but we will be notified by
    * our errorFunction. */
@@ -827,11 +824,12 @@ int main()
         if ((i == fheight/2) and (j == fwidth/2)) cameraDir = rayDir; // try remove this if to make faster??
 
         struct RTCRayHit rayhit = castRay(scene, cameraPos, rayDir);
-        glm::vec3 geomColour = glm::vec3(128.0f, 0.0f, 0.0f);
+        glm::vec3 geomColour = glm::vec3(0.0f, 0.0f, 0.0f);
         glm::vec3 colour = geomColour;
-        glm::vec3 ambientLight = glm::vec3(50.0f, 50.0f, 50.0f);
+        //glm::vec3 ambientLight = glm::vec3(50.0f, 50.0f, 50.0f);
+        glm::vec3 ambientLight = glm::vec3(100.0f, 100.0f, 100.0f);
         if (rayhit.hit.geomID != RTC_INVALID_GEOMETRY_ID) {
-          geomColour = ((float)rayhit.hit.geomID)*glm::vec3(0.0f, 40.0f, 0.0f);
+          geomColour = materials[rayhit.hit.geomID]->Kd;
           //if (rayhit.hit.geomID == 0) geomColour = groundFaceColours[(int)rayhit.hit.primID+1];
           //if (rayhit.hit.geomID == 1) geomColour = cubeFaceColours[(int)rayhit.hit.primID+1];
           glm::vec3 intersectionPos = cameraPos + rayhit.ray.tfar*rayDir;
@@ -843,14 +841,17 @@ int main()
           glm::vec3 geomNormal = -1.0f*glm::normalize(glm::vec3(rayhit.hit.Ng_x, rayhit.hit.Ng_y, rayhit.hit.Ng_z));
           shadowDir = glm::normalize(shadowDir);
           //printf("dot: %f \n", glm::dot(geomNormal, shadowDir));
-          glm::vec3 diffuseDirect = (ambientLight + incidentLight)*geomColour/255.0f*std::max(glm::dot(geomNormal, shadowDir), 0.0f);
+          //Ambient has own reflectance factor should be separate
+          //glm::vec3 diffuseDirect = (ambientLight + incidentLight)*geomColour/255.0f*std::max(glm::dot(geomNormal, shadowDir), 0.0f);
+          glm::vec3 diffuseDirect = incidentLight*geomColour*std::max(glm::dot(geomNormal, shadowDir), 0.0f);
 
+          glm::vec3 ambientColour = ambientLight*materials[rayhit.hit.geomID]->Ka;
 
-          glm::vec3 diffuseIndirect = diffuseIndirectLambert(scene, geomNormal, geomColour, intersectionPos);
+          glm::vec3 diffuseIndirect = diffuseIndirectLambert(scene, geomNormal, geomColour, intersectionPos, materials);
 
-          glm::vec3 specularDirect = specularDirectPhong(intersectionPos, geomNormal, incidentLight);
+          glm::vec3 specularDirect = specularDirectPhong(intersectionPos, geomNormal, incidentLight, materials[rayhit.hit.geomID]->Ns);
 
-          colour = diffuseDirect + diffuseIndirect + specularDirect;
+          colour = diffuseDirect + diffuseIndirect + specularDirect + ambientColour;
 
           float shadowFraction = softShadows(scene, shadowDir, intersectionPos);
           colour = colour * (1-shadowFraction);
@@ -880,6 +881,12 @@ int main()
 
   //releases resources allocated by GLFW
   glfwTerminate();
+
+  for (int j = 0; j < numMaterials; j++){
+    free(materials[j]->name);
+    free(materials[j]->mapKd);
+    free(materials[j]);
+  }
 
   return 0;
 }
