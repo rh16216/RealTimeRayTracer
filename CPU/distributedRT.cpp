@@ -60,12 +60,12 @@ glm::vec3 cubeFaceColours[12] = {glm::vec3(255.0f, 0.0f, 0.0f), glm::vec3(0.0f, 
                                  glm::vec3(255.0f, 0.0f, 0.0f), glm::vec3(0.0f, 255.0f, 0.0f), glm::vec3(0.0f, 0.0f, 255.0f),
                                  glm::vec3(255.0f, 0.0f, 0.0f), glm::vec3(0.0f, 255.0f, 0.0f), glm::vec3(0.0f, 0.0f, 255.0f)};
 
-glm::vec3 lightPos = glm::vec3(0.0f, 1.0f, 0.0f);
+glm::vec3 lightPos = glm::vec3(0.0f, 1.8f, 0.0f);
 //glm::vec3 lightPos = glm::vec3(1.5f, 1.5f, -3.0f);
 //glm::vec3 lightIntensity = 30.0f*glm::vec3(255.0f, 255.0f, 255.0f);
-glm::vec3 lightIntensity = 7.5f*glm::vec3(255.0f, 255.0f, 255.0f);
+glm::vec3 lightIntensity = 5.0f*glm::vec3(255.0f, 255.0f, 255.0f);
 float lightRadius = 0.5f;
-glm::vec3 cameraPos = glm::vec3(0.0f, 1.0f, -2.5f);
+glm::vec3 cameraPos = glm::vec3(0.0f, 1.0f, -0.75f);
 glm::vec3 cameraDir = glm::vec3(0.0f, 0.0f, 1.0f);
 //glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, -5.0f);
 //glm::vec3 cameraDir = glm::vec3(0.0f, 0.0f, 1.0f);
@@ -295,6 +295,7 @@ void parseOBJ(std::vector<glm::vec3> &vertices, std::vector<glm::vec3> &triangle
   char *word = (char *)malloc(256*sizeof(char));
   char *name = (char *)malloc(256*sizeof(char));
   while ((vCount < 10) || (triCount < 12)){
+  //while(text[0]){
     objFile.getline(text, 256);
     std::istringstream spaceStream(text);
     spaceStream >> word;
@@ -322,7 +323,7 @@ void parseOBJ(std::vector<glm::vec3> &vertices, std::vector<glm::vec3> &triangle
       spaceStream >> word;
       vt.z = std::atof(word);
       vtCount = vtCount + 1;
-      printf("vt %d: %f %f %f\n", vtCount, vt.x, vt.y, vt.z);
+      //printf("vt %d: %f %f %f\n", vtCount, vt.x, vt.y, vt.z);
     }
     if (!strcmp(word, "g")){
       spaceStream >> word;
@@ -591,7 +592,7 @@ struct RTCRayHit castRay(RTCScene scene, glm::vec3 origin, glm::vec3 direction)
   rayhit.ray.dir_x = direction.x;
   rayhit.ray.dir_y = direction.y;
   rayhit.ray.dir_z = direction.z;
-  rayhit.ray.tnear = 0;
+  rayhit.ray.tnear = 0.015f;
   rayhit.ray.tfar = std::numeric_limits<float>::infinity();
   rayhit.ray.mask = 0;
   rayhit.ray.flags = 0;
@@ -681,13 +682,13 @@ glm::vec3 findRayDir(float fwidth, float fheight, int i, int j, glm::mat3 rotate
 }
 
 
-glm::vec3 diffuseIndirectLambert(RTCScene scene, glm::vec3 geomNormal, glm::vec3 geomColour, glm::vec3 intersectionPos, struct material **materials){
+glm::vec3 diffuseIndirectLambert(RTCScene scene, glm::vec3 geomNormal, glm::vec3 geomColour, glm::vec3 intersectionPos, struct material **materials, int i, int j){
   std::uniform_real_distribution<float> u(0.0, 1.0);
   std::default_random_engine ugenerator;
   glm::vec3 diffuseIndirect = glm::vec3(0.0f, 0.0f, 0.0f);
   int numIndirectRays = 32;
 
-  for(int k=0; k < numIndirectRays; k++){
+  for (int k = 0; k < numIndirectRays; k++){
 
     float usample0 = u(ugenerator);
     float usample1 = u(ugenerator);
@@ -706,13 +707,22 @@ glm::vec3 diffuseIndirectLambert(RTCScene scene, glm::vec3 geomNormal, glm::vec3
     if (indirectRayhit.hit.geomID != RTC_INVALID_GEOMETRY_ID) {
       //if (indirectRayhit.hit.geomID == 0) indirectGeomColour = groundFaceColours[(int)indirectRayhit.hit.primID+1];
       //if (indirectRayhit.hit.geomID == 1) indirectGeomColour = cubeFaceColours[(int)indirectRayhit.hit.primID+1];
-      indirectGeomColour = materials[indirectRayhit.hit.geomID]->Ka;
-      glm::vec3 indirectGeomIntensity = indirectGeomColour/(4.0f*3.14f*(float)pow(indirectRayhit.ray.tfar,2));
-      diffuseIndirect = diffuseIndirect + indirectGeomIntensity*std::max(glm::dot(geomNormal, normSpaceRandvec), 0.0f);
+      indirectGeomColour = materials[indirectRayhit.hit.geomID]->Kd;
+      glm::vec3 indirectIntersectionPos = newIntersectionPos + indirectRayhit.ray.tfar*normSpaceRandvec;
+      float rsquared = (float)pow(glm::length(lightPos-indirectIntersectionPos), 2);
+      glm::vec3 indirectIncidentLight = lightIntensity/(4.0f*3.14f*rsquared);
+      glm::vec3 indirectGeomNormal = -1.0f*glm::normalize(glm::vec3(indirectRayhit.hit.Ng_x, indirectRayhit.hit.Ng_y, indirectRayhit.hit.Ng_z));
+      glm::vec3 indirectGeomIntensity = indirectIncidentLight*indirectGeomColour*std::max(glm::dot(indirectGeomNormal, glm::normalize(lightPos-indirectIntersectionPos)), 0.0f);
+      diffuseIndirect = diffuseIndirect + geomColour*(indirectGeomIntensity/(4.0f*3.14f*(float)pow(indirectRayhit.ray.tfar,2)))*std::max(glm::dot(geomNormal, glm::normalize(lightPos-newIntersectionPos)), 0.0f);
+
+      //if (rsquared < 0.5f){
+      //  printf("i %d \n", i);
+      //  printf("j %d \n", j);
+      //  printf("k %d: rsquared %f \n", k, rsquared);
+      //}
     }
   }
   diffuseIndirect = diffuseIndirect/(float)numIndirectRays;
-  diffuseIndirect*geomColour/255.0f;
 
   return diffuseIndirect;
 }
@@ -827,7 +837,7 @@ int main()
         glm::vec3 geomColour = glm::vec3(0.0f, 0.0f, 0.0f);
         glm::vec3 colour = geomColour;
         //glm::vec3 ambientLight = glm::vec3(50.0f, 50.0f, 50.0f);
-        glm::vec3 ambientLight = glm::vec3(100.0f, 100.0f, 100.0f);
+        glm::vec3 ambientLight = glm::vec3(10.0f, 10.0f, 10.0f);
         if (rayhit.hit.geomID != RTC_INVALID_GEOMETRY_ID) {
           geomColour = materials[rayhit.hit.geomID]->Kd;
           //if (rayhit.hit.geomID == 0) geomColour = groundFaceColours[(int)rayhit.hit.primID+1];
@@ -847,17 +857,17 @@ int main()
 
           glm::vec3 ambientColour = ambientLight*materials[rayhit.hit.geomID]->Ka;
 
-          glm::vec3 diffuseIndirect = diffuseIndirectLambert(scene, geomNormal, geomColour, intersectionPos, materials);
-
+          glm::vec3 diffuseIndirect = diffuseIndirectLambert(scene, geomNormal, geomColour, intersectionPos, materials, i , j);
+          if (glm::length(diffuseIndirect) > 50.0f) diffuseIndirect = diffuseIndirect/2.0f;
           glm::vec3 specularDirect = specularDirectPhong(intersectionPos, geomNormal, incidentLight, materials[rayhit.hit.geomID]->Ns);
 
           colour = diffuseDirect + diffuseIndirect + specularDirect + ambientColour;
-
-          float shadowFraction = softShadows(scene, shadowDir, intersectionPos);
-          colour = colour * (1-shadowFraction);
+          //colour = diffuseIndirect;
+          //float shadowFraction = softShadows(scene, shadowDir, intersectionPos);
+          //colour = colour * (1-shadowFraction);
 
         }
-        data[i][j][0] = std::min(255.0f,colour.x) * 256 * 256 * 256;
+        data[i][j][0] = std::min(255.0f, colour.x) * 256 * 256 * 256;
         data[i][j][1] = std::min(255.0f, colour.y) * 256 * 256 * 256;
         data[i][j][2] = std::min(255.0f, colour.z) * 256 * 256 * 256;
       }
