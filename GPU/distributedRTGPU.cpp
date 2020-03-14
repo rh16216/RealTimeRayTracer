@@ -14,81 +14,89 @@
 // limitations under the License.                                           //
 // ======================================================================== //
 
+#include <cuda_runtime.h>
+#include <cuda.h>
 #include <optix.h>
-//#include <optix_world.h>
+#include <optix_function_table_definition.h>
+#include <optix_stubs.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdexcept>
 #include <math.h>
 #include <iostream>
 #include <fstream>
+#include <sstream>
 
-/* -------------------------------------------------------------------------- */
-void reportErrorMessage( const char* message )
+//Exception class used by error checking macros
+class Exception : public std::runtime_error
 {
-    std::cerr << "OptiX Error: '" << message << "'\n";
-#if defined(_WIN32) && defined(RELEASE_PUBLIC)
-    {
-        char s[2048];
-        sprintf( s, "OptiX Error: %s", message );
-        MessageBoxA( 0, s, "OptiX Error", MB_OK|MB_ICONWARNING|MB_SYSTEMMODAL );
-    }
-#endif
-}
+ public:
+     Exception( const char* msg )
+         : std::runtime_error( msg )
+     { }
 
+     Exception( OptixResult res, const char* msg )
+         : std::runtime_error( createMessage( res, msg ).c_str() )
+     { }
 
-void handleError( RTcontext context, RTresult code, const char* file,
-        int line)
-{
-    const char* message;
-    char s[2048];
-    rtContextGetErrorString(context, code, &message);
-    sprintf(s, "%s\n(%s:%d)", message, file, line);
-    reportErrorMessage( s );
-}
-
-// Default catch block
-#define SUTIL_CATCH( ctx ) catch( const APIError& e ) {     \
-    handleError( ctx, e.code, e.file.c_str(), e.line );     \
-  }                                                                \
-  catch( const std::exception& e ) {                               \
-    reportErrorMessage( e.what() );                         \
-    exit(1);                                                       \
-  }
-
-// Exeption to be thrown by RT_CHECK_ERROR macro
-struct APIError
-{
-    APIError( RTresult c, const std::string& f, int l )
-        : code( c ), file( f ), line( l ) {}
-    RTresult     code;
-    std::string  file;
-    int          line;
+ private:
+     std::string createMessage( OptixResult res, const char* msg )
+     {
+         std::ostringstream out;
+         out << optixGetErrorName( res ) << ": " << msg;
+         return out.str();
+     }
 };
 
-// Error check/report helper for users of the C API
-#define RT_CHECK_ERROR( func )                                     \
-  do {                                                             \
-    RTresult code = func;                                          \
-    if( code != RT_SUCCESS )                                       \
-      throw APIError( code, __FILE__, __LINE__ );           \
-  } while(0)
+//------------------------------------------------------------------------------
+//
+// CUDA error-checking
+//
+//------------------------------------------------------------------------------
+
+#define CUDA_CHECK( call )                                                     \
+    do                                                                         \
+    {                                                                          \
+        cudaError_t error = call;                                              \
+        if( error != cudaSuccess )                                             \
+        {                                                                      \
+            std::stringstream ss;                                              \
+            ss << "CUDA call (" << #call << " ) failed with error: '"          \
+               << cudaGetErrorString( error )                                  \
+               << "' (" __FILE__ << ":" << __LINE__ << ")\n";                  \
+            throw Exception( ss.str().c_str() );                        \
+        }                                                                      \
+    } while( 0 )
+
+
+//------------------------------------------------------------------------------
+//
+// OptiX error-checking
+//
+//------------------------------------------------------------------------------
+
+#define OPTIX_CHECK( call )                                                    \
+    do                                                                         \
+    {                                                                          \
+        OptixResult res = call;                                                \
+        if( res != OPTIX_SUCCESS )                                             \
+        {                                                                      \
+            std::stringstream ss;                                              \
+            ss << "Optix call '" << #call << "' failed: " __FILE__ ":"         \
+               << __LINE__ << ")\n";                                           \
+            throw Exception( res, ss.str().c_str() );                   \
+        }                                                                      \
+    } while( 0 )
+
 
 int main()
 {
 
-  unsigned int version;
-  RTresult result = rtGetVersion(&version);
-
-  printf("result: %d\n", result);
-  printf("version: %d\n", version);
-
-  RTcontext context = 0;
-  try{
-    /* Create our objects and set state */
-    RT_CHECK_ERROR(rtContextCreate( &context ));
-  }SUTIL_CATCH( context )
-  rtContextSetRayTypeCount( context, 0 );
-  //RT_CHECK_ERROR( rtContextSetEntryPointCount( context, 1 ) );
+  CUDA_CHECK(cudaFree(0)); //Initialize CUDA for this device on this thread
+  CUcontext cuCtx = 0; //Zero means take the current context
+  OptixDeviceContext context;
+  OPTIX_CHECK( optixInit() );
+  OPTIX_CHECK(optixDeviceContextCreate(cuCtx, 0, &context));
 
   int width  = 512;
   int height = 512;
@@ -123,7 +131,7 @@ int main()
 
   outFile.close();
 
-  rtContextDestroy( context );
+  OPTIX_CHECK(optixDeviceContextDestroy(context));
 
   return 0;
 }
