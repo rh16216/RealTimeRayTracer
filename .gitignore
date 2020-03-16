@@ -2,3 +2,5 @@ models/
 *.mtl
 *.zip
 *.obj
+*.ptx
+*.ppm
