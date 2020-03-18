@@ -337,7 +337,7 @@ int main()
       pipeline_compile_options.pipelineLaunchParamsVariableName = "params";
 
       //nvcc -ptx -Ipath-to-optix-sdk/include --use_fast_math myprogram.cu -o myprogram.ptx
-      const std::string ptx = getPtxString( "PTX", "draw_solid_color", nullptr );
+      const std::string ptx = getPtxString( "PTX", "distributedRTGPU", nullptr );
       size_t sizeof_log = sizeof( log );
 
       OPTIX_CHECK_LOG( optixModuleCreateFromPTX(
@@ -365,7 +365,7 @@ int main()
       OptixProgramGroupDesc raygen_prog_group_desc  = {}; //
       raygen_prog_group_desc.kind                     = OPTIX_PROGRAM_GROUP_KIND_RAYGEN;
       raygen_prog_group_desc.raygen.module            = module;
-      raygen_prog_group_desc.raygen.entryFunctionName = "__raygen__draw_solid_color";
+      raygen_prog_group_desc.raygen.entryFunctionName = "__raygen__rg";
       size_t sizeof_log = sizeof( log );
       OPTIX_CHECK_LOG( optixProgramGroupCreate(
                   context,
@@ -443,7 +443,11 @@ int main()
       CUDA_CHECK( cudaMalloc( reinterpret_cast<void**>( &raygen_record ), raygen_record_size ) );
       RayGenSbtRecord rg_sbt;
       OPTIX_CHECK( optixSbtRecordPackHeader( raygen_prog_group, &rg_sbt ) );
-      rg_sbt.data = {0.462f, 0.725f, 0.f};
+      rg_sbt.data = {};
+      rg_sbt.data.cameraPos     = make_float3( 0.0f, 0.0f, -1.0f );
+      rg_sbt.data.cameraUp      = make_float3( 1.0f, 0.0f, 0.0f );
+      rg_sbt.data.cameraRight   = make_float3( 0.0f, 1.0f, 0.0f );
+      rg_sbt.data.cameraForward = make_float3( 0.0f, 0.0f, 1.0f );
       CUDA_CHECK( cudaMemcpy(
                   reinterpret_cast<void*>( raygen_record ),
                   &rg_sbt,
@@ -496,6 +500,7 @@ int main()
       Params params;
       params.image       = output_buffer.map();
       params.image_width = width;
+      params.handle = gas_handle;
 
       CUdeviceptr d_param;
       CUDA_CHECK( cudaMalloc( reinterpret_cast<void**>( &d_param ), sizeof( Params ) ) );

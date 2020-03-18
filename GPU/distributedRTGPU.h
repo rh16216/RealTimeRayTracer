@@ -14,16 +14,20 @@
 #include <map>
 #include <vector>
 
+#include "vec_maths.h"
+
 
 struct Params
 {
     uchar4* image;
     unsigned int image_width;
+    OptixTraversableHandle handle;
 };
 
 struct RayGenData
 {
-    float r,g,b;
+    float3 cameraPos;
+    float3 cameraUp, cameraRight, cameraForward;
 };
 
 //Exception class used by error checking macros
@@ -604,11 +608,4 @@ PIXEL_FORMAT* CUDAOutputBuffer<PIXEL_FORMAT>::getHostPointer()
     {
         return m_host_zcopy_pixels;
     }
-}
-
-
-template <typename IntegerType>
-__forceinline__ __host__ __device__ IntegerType roundUp(IntegerType x, IntegerType y)
-{
-    return ( ( x + y - 1 ) / y ) * y;
 }
