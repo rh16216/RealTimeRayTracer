@@ -605,3 +605,10 @@ PIXEL_FORMAT* CUDAOutputBuffer<PIXEL_FORMAT>::getHostPointer()
         return m_host_zcopy_pixels;
     }
 }
+
+
+template <typename IntegerType>
+__forceinline__ __host__ __device__ IntegerType roundUp(IntegerType x, IntegerType y)
+{
+    return ( ( x + y - 1 ) / y ) * y;
+}

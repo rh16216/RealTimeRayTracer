@@ -14,6 +14,184 @@ typedef SbtRecord<RayGenData> RayGenSbtRecord;
 typedef SbtRecord<int>        MissSbtRecord;
 typedef SbtRecord<int>        HitGroupSbtRecord;
 
+struct Vertex
+{
+    float x, y, z, pad;
+};
+
+
+const int32_t TRIANGLE_COUNT = 32;
+const int32_t MAT_COUNT      = 4;
+
+const static std::array<Vertex, TRIANGLE_COUNT* 3> g_vertices =
+{  {
+    // Floor  -- white lambert
+    {    0.0f,    0.0f,    0.0f, 0.0f },
+    {    0.0f,    0.0f,  559.2f, 0.0f },
+    {  556.0f,    0.0f,  559.2f, 0.0f },
+    {    0.0f,    0.0f,    0.0f, 0.0f },
+    {  556.0f,    0.0f,  559.2f, 0.0f },
+    {  556.0f,    0.0f,    0.0f, 0.0f },
+
+    // Ceiling -- white lambert
+    {    0.0f,  548.8f,    0.0f, 0.0f },
+    {  556.0f,  548.8f,    0.0f, 0.0f },
+    {  556.0f,  548.8f,  559.2f, 0.0f },
+
+    {    0.0f,  548.8f,    0.0f, 0.0f },
+    {  556.0f,  548.8f,  559.2f, 0.0f },
+    {    0.0f,  548.8f,  559.2f, 0.0f },
+
+    // Back wall -- white lambert
+    {    0.0f,    0.0f,  559.2f, 0.0f },
+    {    0.0f,  548.8f,  559.2f, 0.0f },
+    {  556.0f,  548.8f,  559.2f, 0.0f },
+
+    {    0.0f,    0.0f,  559.2f, 0.0f },
+    {  556.0f,  548.8f,  559.2f, 0.0f },
+    {  556.0f,    0.0f,  559.2f, 0.0f },
+
+    // Right wall -- green lambert
+    {    0.0f,    0.0f,    0.0f, 0.0f },
+    {    0.0f,  548.8f,    0.0f, 0.0f },
+    {    0.0f,  548.8f,  559.2f, 0.0f },
+
+    {    0.0f,    0.0f,    0.0f, 0.0f },
+    {    0.0f,  548.8f,  559.2f, 0.0f },
+    {    0.0f,    0.0f,  559.2f, 0.0f },
+
+    // Left wall -- red lambert
+    {  556.0f,    0.0f,    0.0f, 0.0f },
+    {  556.0f,    0.0f,  559.2f, 0.0f },
+    {  556.0f,  548.8f,  559.2f, 0.0f },
+
+    {  556.0f,    0.0f,    0.0f, 0.0f },
+    {  556.0f,  548.8f,  559.2f, 0.0f },
+    {  556.0f,  548.8f,    0.0f, 0.0f },
+
+    // Short block -- white lambert
+    {  130.0f,  165.0f,   65.0f, 0.0f },
+    {   82.0f,  165.0f,  225.0f, 0.0f },
+    {  242.0f,  165.0f,  274.0f, 0.0f },
+
+    {  130.0f,  165.0f,   65.0f, 0.0f },
+    {  242.0f,  165.0f,  274.0f, 0.0f },
+    {  290.0f,  165.0f,  114.0f, 0.0f },
+
+    {  290.0f,    0.0f,  114.0f, 0.0f },
+    {  290.0f,  165.0f,  114.0f, 0.0f },
+    {  240.0f,  165.0f,  272.0f, 0.0f },
+
+    {  290.0f,    0.0f,  114.0f, 0.0f },
+    {  240.0f,  165.0f,  272.0f, 0.0f },
+    {  240.0f,    0.0f,  272.0f, 0.0f },
+
+    {  130.0f,    0.0f,   65.0f, 0.0f },
+    {  130.0f,  165.0f,   65.0f, 0.0f },
+    {  290.0f,  165.0f,  114.0f, 0.0f },
+
+    {  130.0f,    0.0f,   65.0f, 0.0f },
+    {  290.0f,  165.0f,  114.0f, 0.0f },
+    {  290.0f,    0.0f,  114.0f, 0.0f },
+
+    {   82.0f,    0.0f,  225.0f, 0.0f },
+    {   82.0f,  165.0f,  225.0f, 0.0f },
+    {  130.0f,  165.0f,   65.0f, 0.0f },
+
+    {   82.0f,    0.0f,  225.0f, 0.0f },
+    {  130.0f,  165.0f,   65.0f, 0.0f },
+    {  130.0f,    0.0f,   65.0f, 0.0f },
+
+    {  240.0f,    0.0f,  272.0f, 0.0f },
+    {  240.0f,  165.0f,  272.0f, 0.0f },
+    {   82.0f,  165.0f,  225.0f, 0.0f },
+
+    {  240.0f,    0.0f,  272.0f, 0.0f },
+    {   82.0f,  165.0f,  225.0f, 0.0f },
+    {   82.0f,    0.0f,  225.0f, 0.0f },
+
+    // Tall block -- white lambert
+    {  423.0f,  330.0f,  247.0f, 0.0f },
+    {  265.0f,  330.0f,  296.0f, 0.0f },
+    {  314.0f,  330.0f,  455.0f, 0.0f },
+
+    {  423.0f,  330.0f,  247.0f, 0.0f },
+    {  314.0f,  330.0f,  455.0f, 0.0f },
+    {  472.0f,  330.0f,  406.0f, 0.0f },
+
+    {  423.0f,    0.0f,  247.0f, 0.0f },
+    {  423.0f,  330.0f,  247.0f, 0.0f },
+    {  472.0f,  330.0f,  406.0f, 0.0f },
+
+    {  423.0f,    0.0f,  247.0f, 0.0f },
+    {  472.0f,  330.0f,  406.0f, 0.0f },
+    {  472.0f,    0.0f,  406.0f, 0.0f },
+
+    {  472.0f,    0.0f,  406.0f, 0.0f },
+    {  472.0f,  330.0f,  406.0f, 0.0f },
+    {  314.0f,  330.0f,  456.0f, 0.0f },
+
+    {  472.0f,    0.0f,  406.0f, 0.0f },
+    {  314.0f,  330.0f,  456.0f, 0.0f },
+    {  314.0f,    0.0f,  456.0f, 0.0f },
+
+    {  314.0f,    0.0f,  456.0f, 0.0f },
+    {  314.0f,  330.0f,  456.0f, 0.0f },
+    {  265.0f,  330.0f,  296.0f, 0.0f },
+
+    {  314.0f,    0.0f,  456.0f, 0.0f },
+    {  265.0f,  330.0f,  296.0f, 0.0f },
+    {  265.0f,    0.0f,  296.0f, 0.0f },
+
+    {  265.0f,    0.0f,  296.0f, 0.0f },
+    {  265.0f,  330.0f,  296.0f, 0.0f },
+    {  423.0f,  330.0f,  247.0f, 0.0f },
+
+    {  265.0f,    0.0f,  296.0f, 0.0f },
+    {  423.0f,  330.0f,  247.0f, 0.0f },
+    {  423.0f,    0.0f,  247.0f, 0.0f },
+
+    // Ceiling light -- emmissive
+    {  343.0f,  548.6f,  227.0f, 0.0f },
+    {  213.0f,  548.6f,  227.0f, 0.0f },
+    {  213.0f,  548.6f,  332.0f, 0.0f },
+
+    {  343.0f,  548.6f,  227.0f, 0.0f },
+    {  213.0f,  548.6f,  332.0f, 0.0f },
+    {  343.0f,  548.6f,  332.0f, 0.0f }
+} };
+
+static std::array<uint32_t, TRIANGLE_COUNT> g_mat_indices = {{
+    0, 0,                          // Floor         -- white lambert
+    0, 0,                          // Ceiling       -- white lambert
+    0, 0,                          // Back wall     -- white lambert
+    1, 1,                          // Right wall    -- green lambert
+    2, 2,                          // Left wall     -- red lambert
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // Short block   -- white lambert
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // Tall block    -- white lambert
+    3, 3                           // Ceiling light -- emmissive
+}};
+
+
+
+const std::array<float3, MAT_COUNT> g_emission_colors =
+{ {
+    {  0.0f,  0.0f,  0.0f },
+    {  0.0f,  0.0f,  0.0f },
+    {  0.0f,  0.0f,  0.0f },
+    { 15.0f, 15.0f,  5.0f }
+
+} };
+
+
+const std::array<float3, MAT_COUNT> g_diffuse_colors =
+{ {
+    { 0.80f, 0.80f, 0.80f },
+    { 0.05f, 0.80f, 0.05f },
+    { 0.80f, 0.05f, 0.05f },
+    { 0.50f, 0.00f, 0.00f }
+} };
+
 int main()
 {
   int width  = 512;
@@ -26,6 +204,118 @@ int main()
   OptixDeviceContext context;
   OPTIX_CHECK( optixInit() );
   OPTIX_CHECK(optixDeviceContextCreate(cuCtx, 0, &context));
+
+  //
+  // copy mesh data to device
+  //
+  CUdeviceptr d_vertices;
+  const size_t vertices_size_in_bytes = g_vertices.size() * sizeof( Vertex );
+  CUDA_CHECK( cudaMalloc( reinterpret_cast<void**>( &d_vertices ), vertices_size_in_bytes ) );
+  CUDA_CHECK( cudaMemcpy(
+              reinterpret_cast<void*>( d_vertices ),
+              g_vertices.data(), vertices_size_in_bytes,
+              cudaMemcpyHostToDevice
+              ) );
+
+  CUdeviceptr  d_mat_indices;
+  const size_t mat_indices_size_in_bytes = g_mat_indices.size() * sizeof( uint32_t );
+  CUDA_CHECK( cudaMalloc( reinterpret_cast<void**>( &d_mat_indices ), mat_indices_size_in_bytes ) );
+  CUDA_CHECK( cudaMemcpy(
+              reinterpret_cast<void*>( d_mat_indices ),
+              g_mat_indices.data(),
+              mat_indices_size_in_bytes,
+              cudaMemcpyHostToDevice
+              ) );
+
+  //
+  // Build triangle GAS
+  //
+  uint32_t triangle_input_flags[MAT_COUNT] =  // One per SBT record for this build input
+  {
+      OPTIX_GEOMETRY_FLAG_DISABLE_ANYHIT,
+      OPTIX_GEOMETRY_FLAG_DISABLE_ANYHIT,
+      OPTIX_GEOMETRY_FLAG_DISABLE_ANYHIT,
+      OPTIX_GEOMETRY_FLAG_DISABLE_ANYHIT
+  };
+
+  OptixBuildInput triangle_input                           = {};
+  triangle_input.type                                      = OPTIX_BUILD_INPUT_TYPE_TRIANGLES;
+  triangle_input.triangleArray.vertexFormat                = OPTIX_VERTEX_FORMAT_FLOAT3;
+  triangle_input.triangleArray.vertexStrideInBytes         = sizeof( Vertex );
+  triangle_input.triangleArray.numVertices                 = static_cast<uint32_t>( g_vertices.size() );
+  triangle_input.triangleArray.vertexBuffers               = &d_vertices;
+  triangle_input.triangleArray.flags                       = triangle_input_flags;
+  triangle_input.triangleArray.numSbtRecords               = MAT_COUNT;
+  triangle_input.triangleArray.sbtIndexOffsetBuffer        = d_mat_indices;
+  triangle_input.triangleArray.sbtIndexOffsetSizeInBytes   = sizeof( uint32_t );
+  triangle_input.triangleArray.sbtIndexOffsetStrideInBytes = sizeof( uint32_t );
+
+  OptixAccelBuildOptions accel_options = {};
+  accel_options.buildFlags             = OPTIX_BUILD_FLAG_ALLOW_COMPACTION;
+  accel_options.operation              = OPTIX_BUILD_OPERATION_BUILD;
+
+  OptixAccelBufferSizes gas_buffer_sizes;
+  OPTIX_CHECK( optixAccelComputeMemoryUsage(
+              context,
+              &accel_options,
+              &triangle_input,
+              1,  // num_build_inputs
+              &gas_buffer_sizes
+              ) );
+
+  CUdeviceptr d_temp_buffer;
+  CUDA_CHECK( cudaMalloc( reinterpret_cast<void**>( &d_temp_buffer ), gas_buffer_sizes.tempSizeInBytes ) );
+
+  // non-compacted output
+  CUdeviceptr d_buffer_temp_output_gas_and_compacted_size;
+  size_t      compactedSizeOffset = roundUp<size_t>( gas_buffer_sizes.outputSizeInBytes, 8ull );
+  CUDA_CHECK( cudaMalloc(
+              reinterpret_cast<void**>( &d_buffer_temp_output_gas_and_compacted_size ),
+              compactedSizeOffset + 8
+              ) );
+
+  OptixAccelEmitDesc emitProperty = {};
+  emitProperty.type               = OPTIX_PROPERTY_TYPE_COMPACTED_SIZE;
+  emitProperty.result             = ( CUdeviceptr )( (char*)d_buffer_temp_output_gas_and_compacted_size + compactedSizeOffset );
+
+  OptixTraversableHandle gas_handle;
+
+  OPTIX_CHECK( optixAccelBuild(
+              context,
+              0,                                  // CUDA stream
+              &accel_options,
+              &triangle_input,
+              1,                                  // num build inputs
+              d_temp_buffer,
+              gas_buffer_sizes.tempSizeInBytes,
+              d_buffer_temp_output_gas_and_compacted_size,
+              gas_buffer_sizes.outputSizeInBytes,
+              &gas_handle,
+              &emitProperty,                      // emitted property list
+              1                                   // num emitted properties
+              ) );
+
+
+  CUDA_CHECK( cudaFree( reinterpret_cast<void*>( d_temp_buffer ) ) );
+  CUDA_CHECK( cudaFree( reinterpret_cast<void*>( d_mat_indices ) ) );
+
+  size_t compacted_gas_size;
+  CUdeviceptr d_gas_output_buffer;
+  CUDA_CHECK( cudaMemcpy( &compacted_gas_size, (void*)emitProperty.result, sizeof(size_t), cudaMemcpyDeviceToHost ) );
+
+  if( compacted_gas_size < gas_buffer_sizes.outputSizeInBytes )
+  {
+      CUDA_CHECK( cudaMalloc( reinterpret_cast<void**>( &d_gas_output_buffer ), compacted_gas_size ) );
+
+      // use handle as input and output
+      OPTIX_CHECK( optixAccelCompact( context, 0, gas_handle, d_gas_output_buffer, compacted_gas_size, &gas_handle ) );
+
+      CUDA_CHECK( cudaFree( (void*)d_buffer_temp_output_gas_and_compacted_size ) );
+  }
+  else
+  {
+      d_gas_output_buffer = d_buffer_temp_output_gas_and_compacted_size;
+  }
 
 
   //
