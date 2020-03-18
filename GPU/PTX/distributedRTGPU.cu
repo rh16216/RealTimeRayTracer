@@ -68,8 +68,6 @@ static __forceinline__ __device__ void trace(
     prd->z = int_as_float( p2 );
 }
 
-/*
-
 static __forceinline__ __device__ void setPayload( float3 p )
 {
     optixSetPayload_0( float_as_int( p.x ) );
@@ -87,7 +85,6 @@ static __forceinline__ __device__ float3 getPayload()
             );
 }
 
-*/
 
 __forceinline__ __device__ uchar4 make_colour( const float3&  c )
 {
@@ -127,13 +124,12 @@ extern "C" __global__ void __raygen__rg()
     params.image[idx.y * params.image_width + idx.x] = make_colour( payload_rgb );
 }
 
-/*
 
 extern "C" __global__ void __miss__ms()
 {
     MissData* rt_data  = reinterpret_cast<MissData*>( optixGetSbtDataPointer() );
     float3    payload = getPayload();
-    setPayload( make_float3( rt_data->r, rt_data->g, rt_data->b ) );
+    setPayload( rt_data->backgroundColour );
 }
 
 
@@ -144,5 +140,3 @@ extern "C" __global__ void __closesthit__ch()
 
     setPayload( make_float3( barycentrics, 1.0f ) );
 }
-
-*/

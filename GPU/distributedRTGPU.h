@@ -30,6 +30,11 @@ struct RayGenData
     float3 cameraUp, cameraRight, cameraForward;
 };
 
+struct MissData
+{
+    float3 backgroundColour;
+};
+
 //Exception class used by error checking macros
 class Exception : public std::runtime_error
 {

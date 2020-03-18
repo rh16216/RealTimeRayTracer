@@ -11,7 +11,7 @@ struct SbtRecord
 };
 
 typedef SbtRecord<RayGenData> RayGenSbtRecord;
-typedef SbtRecord<int>        MissSbtRecord;
+typedef SbtRecord<MissData>   MissSbtRecord;
 typedef SbtRecord<int>        HitGroupSbtRecord;
 
 struct Vertex
@@ -380,6 +380,8 @@ int main()
       // Leave miss group's module and entryfunc name null
       OptixProgramGroupDesc miss_prog_group_desc = {};
       miss_prog_group_desc.kind = OPTIX_PROGRAM_GROUP_KIND_MISS;
+      miss_prog_group_desc.miss.module            = module;
+      miss_prog_group_desc.miss.entryFunctionName = "__miss__ms";
       sizeof_log = sizeof( log );
       OPTIX_CHECK_LOG( optixProgramGroupCreate(
                   context,
@@ -394,6 +396,8 @@ int main()
       // Leave hit group's module and entryfunc name null
       OptixProgramGroupDesc hitgroup_prog_group_desc = {};
       hitgroup_prog_group_desc.kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
+      hitgroup_prog_group_desc.hitgroup.moduleCH            = module;
+      hitgroup_prog_group_desc.hitgroup.entryFunctionNameCH = "__closesthit__ch";
       sizeof_log = sizeof( log );
       OPTIX_CHECK_LOG( optixProgramGroupCreate(
                   context,
@@ -413,7 +417,7 @@ int main()
   //
   OptixPipeline pipeline = nullptr;
   {
-      OptixProgramGroup program_groups[] = { raygen_prog_group };
+      OptixProgramGroup program_groups[] = { raygen_prog_group, miss_prog_group, hitgroup_prog_group };
 
       OptixPipelineLinkOptions pipeline_link_options = {};
       pipeline_link_options.maxTraceDepth          = 5;
@@ -458,8 +462,10 @@ int main()
       CUdeviceptr miss_record;
       size_t      miss_record_size = sizeof( MissSbtRecord );
       CUDA_CHECK( cudaMalloc( reinterpret_cast<void**>( &miss_record ), miss_record_size ) );
-      RayGenSbtRecord ms_sbt;
+      MissSbtRecord ms_sbt;
       OPTIX_CHECK( optixSbtRecordPackHeader( miss_prog_group, &ms_sbt ) );
+      ms_sbt.data = {};
+      ms_sbt.data.backgroundColour = make_float3( 0.0f, 0.0f, 0.0f );
       CUDA_CHECK( cudaMemcpy(
                   reinterpret_cast<void*>( miss_record ),
                   &ms_sbt,
