@@ -63,7 +63,7 @@ glm::vec3 cubeFaceColours[12] = {glm::vec3(255.0f, 0.0f, 0.0f), glm::vec3(0.0f, 
 glm::vec3 lightPos = glm::vec3(0.0f, 1.8f, 0.0f);
 //glm::vec3 lightPos = glm::vec3(1.5f, 1.5f, -3.0f);
 //glm::vec3 lightIntensity = 30.0f*glm::vec3(255.0f, 255.0f, 255.0f);
-glm::vec3 lightIntensity = 5.0f*glm::vec3(255.0f, 255.0f, 255.0f);
+glm::vec3 lightIntensity = 8.0f*glm::vec3(255.0f, 255.0f, 255.0f);
 float lightRadius = 0.5f;
 glm::vec3 cameraPos = glm::vec3(0.0f, 1.0f, -0.75f);
 glm::vec3 cameraDir = glm::vec3(0.0f, 0.0f, 1.0f);
@@ -592,7 +592,7 @@ struct RTCRayHit castRay(RTCScene scene, glm::vec3 origin, glm::vec3 direction)
   rayhit.ray.dir_x = direction.x;
   rayhit.ray.dir_y = direction.y;
   rayhit.ray.dir_z = direction.z;
-  rayhit.ray.tnear = 0.015f;
+  rayhit.ray.tnear = 0;
   rayhit.ray.tfar = std::numeric_limits<float>::infinity();
   rayhit.ray.mask = 0;
   rayhit.ray.flags = 0;
@@ -686,7 +686,7 @@ glm::vec3 diffuseIndirectLambert(RTCScene scene, glm::vec3 geomNormal, glm::vec3
   std::uniform_real_distribution<float> u(0.0, 1.0);
   std::default_random_engine ugenerator;
   glm::vec3 diffuseIndirect = glm::vec3(0.0f, 0.0f, 0.0f);
-  int numIndirectRays = 32;
+  int numIndirectRays = 64;
 
   for (int k = 0; k < numIndirectRays; k++){
 
@@ -705,24 +705,27 @@ glm::vec3 diffuseIndirectLambert(RTCScene scene, glm::vec3 geomNormal, glm::vec3
     glm::vec3 newIntersectionPos = intersectionPos + 0.01f*geomNormal;
     struct RTCRayHit indirectRayhit = castRay(scene, newIntersectionPos, normSpaceRandvec);
     if (indirectRayhit.hit.geomID != RTC_INVALID_GEOMETRY_ID) {
-      //if (indirectRayhit.hit.geomID == 0) indirectGeomColour = groundFaceColours[(int)indirectRayhit.hit.primID+1];
-      //if (indirectRayhit.hit.geomID == 1) indirectGeomColour = cubeFaceColours[(int)indirectRayhit.hit.primID+1];
-      indirectGeomColour = materials[indirectRayhit.hit.geomID]->Kd;
-      glm::vec3 indirectIntersectionPos = newIntersectionPos + indirectRayhit.ray.tfar*normSpaceRandvec;
-      float rsquared = (float)pow(glm::length(lightPos-indirectIntersectionPos), 2);
-      glm::vec3 indirectIncidentLight = lightIntensity/(4.0f*3.14f*rsquared);
-      glm::vec3 indirectGeomNormal = -1.0f*glm::normalize(glm::vec3(indirectRayhit.hit.Ng_x, indirectRayhit.hit.Ng_y, indirectRayhit.hit.Ng_z));
-      glm::vec3 indirectGeomIntensity = indirectIncidentLight*indirectGeomColour*std::max(glm::dot(indirectGeomNormal, glm::normalize(lightPos-indirectIntersectionPos)), 0.0f);
-      diffuseIndirect = diffuseIndirect + geomColour*(indirectGeomIntensity/(4.0f*3.14f*(float)pow(indirectRayhit.ray.tfar,2)))*std::max(glm::dot(geomNormal, glm::normalize(lightPos-newIntersectionPos)), 0.0f);
-
-      //if (rsquared < 0.5f){
-      //  printf("i %d \n", i);
-      //  printf("j %d \n", j);
-      //  printf("k %d: rsquared %f \n", k, rsquared);
-      //}
+      if (!strcmp(materials[indirectRayhit.hit.geomID]->name, "leftWall") || !strcmp(materials[indirectRayhit.hit.geomID]->name, "rightWall")){
+        //if (indirectRayhit.hit.geomID == 0) indirectGeomColour = groundFaceColours[(int)indirectRayhit.hit.primID+1];
+        //if (indirectRayhit.hit.geomID == 1) indirectGeomColour = cubeFaceColours[(int)indirectRayhit.hit.primID+1];
+        indirectGeomColour = materials[indirectRayhit.hit.geomID]->Kd;
+        glm::vec3 indirectIntersectionPos = newIntersectionPos + indirectRayhit.ray.tfar*normSpaceRandvec;
+        float rsquared = (float)pow(glm::length(lightPos-indirectIntersectionPos), 2);
+        glm::vec3 indirectIncidentLight = lightIntensity/(4.0f*3.14f*rsquared);
+        glm::vec3 indirectGeomNormal = glm::normalize(glm::vec3(indirectRayhit.hit.Ng_x, indirectRayhit.hit.Ng_y, indirectRayhit.hit.Ng_z));
+        if (glm::dot(indirectGeomNormal, -1.0f*normSpaceRandvec) < 0) indirectGeomNormal = -1.0f*indirectGeomNormal;
+        glm::vec3 indirectGeomIntensity = indirectIncidentLight*indirectGeomColour*std::max(glm::dot(indirectGeomNormal, glm::normalize(lightPos-indirectIntersectionPos)), 0.0f);
+        diffuseIndirect = diffuseIndirect + geomColour*indirectGeomIntensity;
+      }
     }
   }
   diffuseIndirect = diffuseIndirect/(float)numIndirectRays;
+
+  //if (glm::length(diffuseIndirect) > 85.0f){
+  //  printf("i %d \n", i);
+  //  printf("j %d \n", j);
+  //  printf("diffuseIndirect: %f %f %f \n", diffuseIndirect.x, diffuseIndirect.y, diffuseIndirect.z);
+  //}
 
   return diffuseIndirect;
 }
@@ -848,7 +851,8 @@ int main()
           glm::vec3 incidentLight = lightIntensity/(4.0f*3.14f*rsquared);
           //printf("incidentLight: %f %f %f \n", incidentLight.x, incidentLight.y, incidentLight.z);
           //inverted normals for Cornell??
-          glm::vec3 geomNormal = -1.0f*glm::normalize(glm::vec3(rayhit.hit.Ng_x, rayhit.hit.Ng_y, rayhit.hit.Ng_z));
+          glm::vec3 geomNormal = glm::normalize(glm::vec3(rayhit.hit.Ng_x, rayhit.hit.Ng_y, rayhit.hit.Ng_z));
+          if (glm::dot(geomNormal, -1.0f*rayDir) < 0) geomNormal = -1.0f*geomNormal;
           shadowDir = glm::normalize(shadowDir);
           //printf("dot: %f \n", glm::dot(geomNormal, shadowDir));
           //Ambient has own reflectance factor should be separate
@@ -858,7 +862,7 @@ int main()
           glm::vec3 ambientColour = ambientLight*materials[rayhit.hit.geomID]->Ka;
 
           glm::vec3 diffuseIndirect = diffuseIndirectLambert(scene, geomNormal, geomColour, intersectionPos, materials, i , j);
-          if (glm::length(diffuseIndirect) > 50.0f) diffuseIndirect = diffuseIndirect/2.0f;
+
           glm::vec3 specularDirect = specularDirectPhong(intersectionPos, geomNormal, incidentLight, materials[rayhit.hit.geomID]->Ns);
 
           colour = diffuseDirect + diffuseIndirect + specularDirect + ambientColour;
