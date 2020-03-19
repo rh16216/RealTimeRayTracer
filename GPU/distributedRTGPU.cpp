@@ -331,8 +331,8 @@ int main()
 
       pipeline_compile_options.usesMotionBlur        = false;
       pipeline_compile_options.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING;
-      pipeline_compile_options.numPayloadValues      = 2;
-      pipeline_compile_options.numAttributeValues    = 2;
+      pipeline_compile_options.numPayloadValues      = 3;
+      pipeline_compile_options.numAttributeValues    = 0;
       pipeline_compile_options.exceptionFlags        = OPTIX_EXCEPTION_FLAG_NONE;  // TODO: should be OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW;
       pipeline_compile_options.pipelineLaunchParamsVariableName = "params";
 
@@ -448,9 +448,9 @@ int main()
       RayGenSbtRecord rg_sbt;
       OPTIX_CHECK( optixSbtRecordPackHeader( raygen_prog_group, &rg_sbt ) );
       rg_sbt.data = {};
-      rg_sbt.data.cameraPos     = make_float3( 0.0f, 0.0f, -1.0f );
-      rg_sbt.data.cameraUp      = make_float3( 1.0f, 0.0f, 0.0f );
-      rg_sbt.data.cameraRight   = make_float3( 0.0f, 1.0f, 0.0f );
+      rg_sbt.data.cameraPos     = make_float3( 278.0f, 273.0f, -900.0f );
+      rg_sbt.data.cameraRight   = make_float3( 1.0f, 0.0f, 0.0f );
+      rg_sbt.data.cameraUp      = make_float3( 0.0f, 1.0f, 0.0f );
       rg_sbt.data.cameraForward = make_float3( 0.0f, 0.0f, 1.0f );
       CUDA_CHECK( cudaMemcpy(
                   reinterpret_cast<void*>( raygen_record ),

@@ -26,6 +26,8 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
+// compile using: nvcc --std c++11 -ptx -I/sw/lang/cuda_10.1.105/NVIDIA-OptiX-SDK-7.0.0-linux64/include --use_fast_math distributedRTGPU.cu -o distributedRTGPU.ptx
+
 #include <optix.h>
 
 #include "../distributedRTGPU.h"
@@ -112,7 +114,9 @@ extern "C" __global__ void __raygen__rg()
             ) - 1.0f;
 
     const float3 origin      = rtData->cameraPos;
-    const float3 direction   = normalize( d.x * U + d.y * V + W );
+    //-ve as index x is left to right and index y is top to bottom
+    //whereas coordinate space x is right to left (change?) and y is bottom to top
+    const float3 direction   = normalize( -1.0f*d.y * U + -1.0f*d.x * V + W );
     float3       payload_rgb = make_float3( 0.5f, 0.5f, 0.5f );
     trace( params.handle,
             origin,

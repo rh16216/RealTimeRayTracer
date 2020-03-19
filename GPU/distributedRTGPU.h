@@ -27,7 +27,7 @@ struct Params
 struct RayGenData
 {
     float3 cameraPos;
-    float3 cameraUp, cameraRight, cameraForward;
+    float3 cameraRight, cameraUp, cameraForward;
 };
 
 struct MissData
