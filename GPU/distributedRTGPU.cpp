@@ -10,9 +10,9 @@ struct SbtRecord
     T data;
 };
 
-typedef SbtRecord<RayGenData> RayGenSbtRecord;
-typedef SbtRecord<MissData>   MissSbtRecord;
-typedef SbtRecord<int>        HitGroupSbtRecord;
+typedef SbtRecord<RayGenData>   RayGenSbtRecord;
+typedef SbtRecord<MissData>     MissSbtRecord;
+typedef SbtRecord<HitGroupData> HitGroupSbtRecord;
 
 struct Vertex
 {
@@ -296,8 +296,8 @@ int main()
               ) );
 
 
-  CUDA_CHECK( cudaFree( reinterpret_cast<void*>( d_temp_buffer ) ) );
-  CUDA_CHECK( cudaFree( reinterpret_cast<void*>( d_mat_indices ) ) );
+  //CUDA_CHECK( cudaFree( reinterpret_cast<void*>( d_temp_buffer ) ) );
+  //CUDA_CHECK( cudaFree( reinterpret_cast<void*>( d_mat_indices ) ) );
 
   size_t compacted_gas_size;
   CUdeviceptr d_gas_output_buffer;
@@ -332,7 +332,7 @@ int main()
       pipeline_compile_options.usesMotionBlur        = false;
       pipeline_compile_options.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING;
       pipeline_compile_options.numPayloadValues      = 3;
-      pipeline_compile_options.numAttributeValues    = 0;
+      pipeline_compile_options.numAttributeValues    = 2;
       pipeline_compile_options.exceptionFlags        = OPTIX_EXCEPTION_FLAG_NONE;  // TODO: should be OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW;
       pipeline_compile_options.pipelineLaunchParamsVariableName = "params";
 
@@ -475,23 +475,31 @@ int main()
 
       CUdeviceptr hitgroup_record;
       size_t      hitgroup_record_size = sizeof( HitGroupSbtRecord );
-      CUDA_CHECK( cudaMalloc( reinterpret_cast<void**>( &hitgroup_record ), hitgroup_record_size ) );
-      RayGenSbtRecord hg_sbt;
-      OPTIX_CHECK( optixSbtRecordPackHeader( hitgroup_prog_group, &hg_sbt ) );
+      CUDA_CHECK( cudaMalloc( reinterpret_cast<void**>( &hitgroup_record ), hitgroup_record_size*MAT_COUNT ) );
+      HitGroupSbtRecord hg_sbt[MAT_COUNT];
+      for( int i = 0; i < MAT_COUNT; i++ )
+      {
+          OPTIX_CHECK( optixSbtRecordPackHeader( hitgroup_prog_group, &hg_sbt[i] ) );
+          hg_sbt[i].data = {};
+          hg_sbt[i].data.emission_color = g_emission_colors[i];
+          hg_sbt[i].data.diffuse_color  = g_diffuse_colors[i];
+          hg_sbt[i].data.vertices       = reinterpret_cast<float4*>( d_vertices );
+      }
+
       CUDA_CHECK( cudaMemcpy(
                   reinterpret_cast<void*>( hitgroup_record ),
-                  &hg_sbt,
-                  hitgroup_record_size,
+                  hg_sbt,
+                  hitgroup_record_size*MAT_COUNT,
                   cudaMemcpyHostToDevice
                   ) );
 
       sbt.raygenRecord                = raygen_record;
       sbt.missRecordBase              = miss_record;
-      sbt.missRecordStrideInBytes     = sizeof( MissSbtRecord );
+      sbt.missRecordStrideInBytes     = static_cast<uint32_t>( miss_record_size );
       sbt.missRecordCount             = 1;
       sbt.hitgroupRecordBase          = hitgroup_record;
-      sbt.hitgroupRecordStrideInBytes = sizeof( HitGroupSbtRecord );
-      sbt.hitgroupRecordCount         = 1;
+      sbt.hitgroupRecordStrideInBytes = static_cast<uint32_t>( hitgroup_record_size );
+      sbt.hitgroupRecordCount         = MAT_COUNT;
   }
 
   CUDAOutputBuffer<uchar4> output_buffer( CUDAOutputBufferType::CUDA_DEVICE, width, height );
@@ -562,6 +570,9 @@ int main()
       CUDA_CHECK( cudaFree( reinterpret_cast<void*>( sbt.raygenRecord       ) ) );
       CUDA_CHECK( cudaFree( reinterpret_cast<void*>( sbt.missRecordBase     ) ) );
       CUDA_CHECK( cudaFree( reinterpret_cast<void*>( sbt.hitgroupRecordBase ) ) );
+
+      CUDA_CHECK( cudaFree( reinterpret_cast<void*>( d_temp_buffer ) ) );
+      CUDA_CHECK( cudaFree( reinterpret_cast<void*>( d_mat_indices ) ) );
 
       OPTIX_CHECK( optixPipelineDestroy( pipeline ) );
       OPTIX_CHECK( optixProgramGroupDestroy( hitgroup_prog_group ) );

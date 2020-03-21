@@ -35,6 +35,14 @@ struct MissData
     float3 backgroundColour;
 };
 
+struct HitGroupData
+{
+    float3  emission_color;
+    float3  diffuse_color;
+    float4* vertices;
+};
+
+
 //Exception class used by error checking macros
 class Exception : public std::runtime_error
 {

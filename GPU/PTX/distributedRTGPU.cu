@@ -62,7 +62,7 @@ static __forceinline__ __device__ void trace(
             OptixVisibilityMask( 1 ),
             OPTIX_RAY_FLAG_NONE,
             0,                   // SBT offset
-            0,                   // SBT stride
+            1,                   // SBT stride
             0,                   // missSBTIndex
             p0, p1, p2 );
     prd->x = int_as_float( p0 );
@@ -139,8 +139,8 @@ extern "C" __global__ void __miss__ms()
 
 extern "C" __global__ void __closesthit__ch()
 {
+    HitGroupData* rt_data = (HitGroupData*)optixGetSbtDataPointer();
 
-    const float2 barycentrics = optixGetTriangleBarycentrics();
-
-    setPayload( make_float3( barycentrics, 1.0f ) );
+    float3 diffuseColour = rt_data->diffuse_color;
+    setPayload(diffuseColour);
 }
