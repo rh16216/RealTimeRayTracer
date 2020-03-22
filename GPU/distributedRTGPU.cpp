@@ -515,8 +515,13 @@ int main()
       params.image       = output_buffer.map();
       params.image_width = width;
       params.handle = gas_handle;
-      params.lightIntensity = make_float3( 750000.0f, 750000.0f, 250000.0f );
-      params.lightPos = make_float3( 278.0f, 548.5f, 279.5f );
+      //params.lightIntensity = make_float3( 750000.0f, 750000.0f, 250000.0f ); //point
+      params.lightIntensity = make_float3( 15.0f, 15.0f, 5.0f ); //area
+      params.lightPos       = make_float3( 343.0f, 548.5f, 227.0f ); //area
+      params.lightV1        = make_float3( 0.0f, 0.0f, 105.0f );
+      params.lightV2        = make_float3( -130.0f, 0.0f, 0.0f );
+      params.lightNorm      = normalize( cross( params.lightV1, params.lightV2 ) );
+      //params.lightPos = make_float3( 278.0f, 548.5f, 279.5f ); //point
 
       CUdeviceptr d_param;
       CUDA_CHECK( cudaMalloc( reinterpret_cast<void**>( &d_param ), sizeof( Params ) ) );

@@ -154,14 +154,17 @@ extern "C" __global__ void __closesthit__ch()
     const float3 P    = optixGetWorldRayOrigin() + optixGetRayTmax()*ray_dir;
 
     const float3 diffuseColour = rt_data->diffuse_color;
+    const float z1 = 0.5f; // make random
+    const float z2 = 0.5f; // make random
+    const float3 lightPosSample = params.lightPos + params.lightV1 * z1 + params.lightV2 * z2;
 
-    const float  Ldist = length(params.lightPos - P );
-    const float3 Ldir  = normalize(params.lightPos - P );
+    const float  Ldist = length(lightPosSample - P );
+    const float3 Ldir  = normalize(lightPosSample - P );
     const float  nDl   = dot( N, Ldir );
+    const float  LnDl  = -dot( params.lightNorm, Ldir );
+    const float A = length(cross(params.lightV1, params.lightV2));
 
-    float3 colour = params.lightIntensity*nDl*diffuseColour/(4.0f * M_PIf * Ldist * Ldist);
+    float3 colour = params.lightIntensity*LnDl*nDl*A*diffuseColour/(M_PIf * Ldist * Ldist);
 
-    printf("colour: %f %f %f \n", colour.x, colour.y, colour.z);
-
-    setPayload(colour);
+    setPayload(colour+rt_data->emission_color);
 }

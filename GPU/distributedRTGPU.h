@@ -24,6 +24,9 @@ struct Params
     OptixTraversableHandle handle;
     float3 lightIntensity;
     float3 lightPos;
+    float3 lightNorm; //area light
+    float3 lightV1; //area light
+    float3 lightV2; //area light
 };
 
 struct RayGenData
