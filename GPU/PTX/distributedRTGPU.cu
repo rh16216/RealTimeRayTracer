@@ -38,6 +38,77 @@ extern "C" {
 __constant__ Params params;
 }
 
+struct RadiancePRD
+{
+    // TODO: move some state directly into payload registers?
+    float3   emitted;
+    float3   radiance;
+    float3   attenuation;
+    float3   origin;
+    float3   direction;
+    //uint32_t seed;
+    //int32_t  countEmitted;
+    int32_t  done;
+    //int32_t  pad;
+
+};
+
+struct Onb
+{
+  __forceinline__ __device__ Onb(const float3& normal)
+  {
+    m_normal = normal;
+
+    if( fabs(m_normal.x) > fabs(m_normal.z) )
+    {
+      m_binormal.x = -m_normal.y;
+      m_binormal.y =  m_normal.x;
+      m_binormal.z =  0;
+    }
+    else
+    {
+      m_binormal.x =  0;
+      m_binormal.y = -m_normal.z;
+      m_binormal.z =  m_normal.y;
+    }
+
+    m_binormal = normalize(m_binormal);
+    m_tangent = cross( m_binormal, m_normal );
+  }
+
+  __forceinline__ __device__ void inverse_transform(float3& p) const
+  {
+    p = p.x*m_tangent + p.y*m_binormal + p.z*m_normal;
+  }
+
+  float3 m_tangent;
+  float3 m_binormal;
+  float3 m_normal;
+};
+
+
+static __forceinline__ __device__ void* unpackPointer( uint32_t i0, uint32_t i1 )
+{
+    const uint64_t uptr = static_cast<uint64_t>( i0 ) << 32 | i1;
+    void*           ptr = reinterpret_cast<void*>( uptr );
+    return ptr;
+}
+
+
+static __forceinline__ __device__ void  packPointer( void* ptr, uint32_t& i0, uint32_t& i1 )
+{
+    const uint64_t uptr = reinterpret_cast<uint64_t>( ptr );
+    i0 = uptr >> 32;
+    i1 = uptr & 0x00000000ffffffff;
+}
+
+
+static __forceinline__ __device__ RadiancePRD* getPRD()
+{
+    const uint32_t u0 = optixGetPayload_0();
+    const uint32_t u1 = optixGetPayload_1();
+    return reinterpret_cast<RadiancePRD*>( unpackPointer( u0, u1 ) );
+}
 
 static __forceinline__ __device__ void trace(
         OptixTraversableHandle handle,
@@ -45,13 +116,11 @@ static __forceinline__ __device__ void trace(
         float3                 ray_direction,
         float                  tmin,
         float                  tmax,
-        float3*                prd
+        RadiancePRD*           prd
         )
 {
-    uint32_t p0, p1, p2;
-    p0 = float_as_int( prd->x );
-    p1 = float_as_int( prd->y );
-    p2 = float_as_int( prd->z );
+    uint32_t u0, u1;
+    packPointer( prd, u0, u1 );
     optixTrace(
             handle,
             ray_origin,
@@ -64,27 +133,21 @@ static __forceinline__ __device__ void trace(
             0,                   // SBT offset
             1,                   // SBT stride
             0,                   // missSBTIndex
-            p0, p1, p2 );
-    prd->x = int_as_float( p0 );
-    prd->y = int_as_float( p1 );
-    prd->z = int_as_float( p2 );
-}
-
-static __forceinline__ __device__ void setPayload( float3 p )
-{
-    optixSetPayload_0( float_as_int( p.x ) );
-    optixSetPayload_1( float_as_int( p.y ) );
-    optixSetPayload_2( float_as_int( p.z ) );
+            u0, u1 );
 }
 
 
-static __forceinline__ __device__ float3 getPayload()
+
+static __forceinline__ __device__ void cosine_sample_hemisphere(const float u1, const float u2, float3& p)
 {
-    return make_float3(
-            int_as_float( optixGetPayload_0() ),
-            int_as_float( optixGetPayload_1() ),
-            int_as_float( optixGetPayload_2() )
-            );
+  // Uniformly sample disk.
+  const float r   = sqrtf( u1 );
+  const float phi = 2.0f*M_PIf * u2;
+  p.x = r * cosf( phi );
+  p.y = r * sinf( phi );
+
+  // Project up to hemisphere.
+  p.z = sqrtf( fmaxf( 0.0f, 1.0f - p.x*p.x - p.y*p.y ) );
 }
 
 
@@ -113,27 +176,44 @@ extern "C" __global__ void __raygen__rg()
             static_cast<float>( idx.y ) / static_cast<float>( dim.y )
             ) - 1.0f;
 
-    const float3 origin      = rtData->cameraPos;
+    float3 origin      = rtData->cameraPos;
     //-ve as index x is left to right and index y is top to bottom
     //whereas coordinate space x is right to left (change?) and y is bottom to top
-    const float3 direction   = normalize( -1.0f*d.y * U + -1.0f*d.x * V + W );
-    float3       payload_rgb = make_float3( 0.5f, 0.5f, 0.5f );
-    trace( params.handle,
-            origin,
-            direction,
-            0.00f,  // tmin
-            1e16f,  // tmax
-            &payload_rgb );
+    float3 direction   = normalize( -1.0f*d.y * U + -1.0f*d.x * V + W );
+    RadiancePRD prd;
+    prd.emitted      = make_float3(0.f);
+    prd.radiance     = make_float3(0.f);
+    prd.attenuation  = make_float3(1.f);
+    prd.done         = false;
+    const int depth = 2;
+    int iters = 0;
+    float3 colour = make_float3(0.0f, 0.0f, 0.0f);
+    while (iters < depth && !prd.done){
 
-    params.image[idx.y * params.image_width + idx.x] = make_colour( payload_rgb );
+      trace( params.handle,
+              origin,
+              direction,
+              0.00f,  // tmin
+              1e16f,  // tmax
+              &prd );
+
+      colour = colour + prd.radiance*prd.attenuation + prd.emitted;
+      origin = prd.origin;
+      direction = prd.direction;
+
+      iters = iters+1;
+    }
+    params.image[idx.y * params.image_width + idx.x] = make_colour(colour);
 }
 
 
 extern "C" __global__ void __miss__ms()
 {
-    MissData* rt_data  = reinterpret_cast<MissData*>( optixGetSbtDataPointer() );
-    float3    payload = getPayload();
-    setPayload( rt_data->backgroundColour );
+  MissData* rt_data  = reinterpret_cast<MissData*>( optixGetSbtDataPointer() );
+  RadiancePRD* prd = getPRD();
+
+  prd->radiance = rt_data->backgroundColour;
+  prd->done      = true;
 }
 
 
@@ -156,6 +236,16 @@ extern "C" __global__ void __closesthit__ch()
     const float3 diffuseColour = rt_data->diffuse_color;
     const float z1 = 0.5f; // make random
     const float z2 = 0.5f; // make random
+
+    RadiancePRD* prd = getPRD();
+
+    float3 w_in;
+    cosine_sample_hemisphere( z1, z2, w_in );
+    Onb onb( N );
+    onb.inverse_transform( w_in );
+    prd->direction = w_in;
+    prd->origin    = P;
+
     const float3 lightPosSample = params.lightPos + params.lightV1 * z1 + params.lightV2 * z2;
 
     const float  Ldist = length(lightPosSample - P );
@@ -164,7 +254,8 @@ extern "C" __global__ void __closesthit__ch()
     const float  LnDl  = -dot( params.lightNorm, Ldir );
     const float A = length(cross(params.lightV1, params.lightV2));
 
-    float3 colour = params.lightIntensity*LnDl*nDl*A*diffuseColour/(M_PIf * Ldist * Ldist);
+    prd->radiance = params.lightIntensity*LnDl*nDl*A/(M_PIf * Ldist * Ldist);
+    prd->emitted = rt_data->emission_color;
+    prd->attenuation = prd->attenuation*diffuseColour;
 
-    setPayload(colour+rt_data->emission_color);
 }
