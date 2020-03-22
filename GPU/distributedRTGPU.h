@@ -22,6 +22,8 @@ struct Params
     uchar4* image;
     unsigned int image_width;
     OptixTraversableHandle handle;
+    float3 lightIntensity;
+    float3 lightPos;
 };
 
 struct RayGenData

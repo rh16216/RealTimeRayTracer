@@ -141,6 +141,27 @@ extern "C" __global__ void __closesthit__ch()
 {
     HitGroupData* rt_data = (HitGroupData*)optixGetSbtDataPointer();
 
-    float3 diffuseColour = rt_data->diffuse_color;
-    setPayload(diffuseColour);
+    const int    prim_idx        = optixGetPrimitiveIndex();
+    const float3 ray_dir         = optixGetWorldRayDirection();
+    const int    vert_idx_offset = prim_idx*3;
+
+    const float3 v0   = make_float3( rt_data->vertices[ vert_idx_offset+0 ] );
+    const float3 v1   = make_float3( rt_data->vertices[ vert_idx_offset+1 ] );
+    const float3 v2   = make_float3( rt_data->vertices[ vert_idx_offset+2 ] );
+    const float3 N_0  = normalize( cross( v1-v0, v2-v0 ) );
+
+    const float3 N    = faceforward( N_0, -ray_dir, N_0 );
+    const float3 P    = optixGetWorldRayOrigin() + optixGetRayTmax()*ray_dir;
+
+    const float3 diffuseColour = rt_data->diffuse_color;
+
+    const float  Ldist = length(params.lightPos - P );
+    const float3 Ldir  = normalize(params.lightPos - P );
+    const float  nDl   = dot( N, Ldir );
+
+    float3 colour = params.lightIntensity*nDl*diffuseColour/(4.0f * M_PIf * Ldist * Ldist);
+
+    printf("colour: %f %f %f \n", colour.x, colour.y, colour.z);
+
+    setPayload(colour);
 }
