@@ -131,12 +131,41 @@ static __forceinline__ __device__ void trace(
             OptixVisibilityMask( 1 ),
             OPTIX_RAY_FLAG_NONE,
             0,                   // SBT offset
-            1,                   // SBT stride
+            2,                   // SBT stride
             0,                   // missSBTIndex
             u0, u1 );
 }
 
+static __forceinline__ __device__ bool traceShadow(
+        OptixTraversableHandle handle,
+        float3                 ray_origin,
+        float3                 ray_direction,
+        float                  tmin,
+        float                  tmax
+        )
+{
+    uint32_t occluded = 0u;
+    optixTrace(
+            handle,
+            ray_origin,
+            ray_direction,
+            tmin,
+            tmax,
+            0.0f,                    // rayTime
+            OptixVisibilityMask( 1 ),
+            OPTIX_RAY_FLAG_TERMINATE_ON_FIRST_HIT,
+            1,                        // SBT offset
+            2,                        // SBT stride
+            1,                        // missSBTIndex
+            occluded );
+    return occluded;
+}
 
+
+static __forceinline__ __device__ void setPayloadOcclusion( bool occluded )
+{
+    optixSetPayload_0( static_cast<uint32_t>( occluded ) );
+}
 
 static __forceinline__ __device__ void cosine_sample_hemisphere(const float u1, const float u2, float3& p)
 {
@@ -225,6 +254,10 @@ extern "C" __global__ void __miss__ms()
   prd->done      = true;
 }
 
+extern "C" __global__ void __closesthit__shadow()
+{
+    setPayloadOcclusion( true );
+}
 
 extern "C" __global__ void __closesthit__ch()
 {
@@ -263,8 +296,22 @@ extern "C" __global__ void __closesthit__ch()
     const float  LnDl  = -dot( params.lightNorm, Ldir );
     const float A = length(cross(params.lightV1, params.lightV2));
 
-    prd->radiance = params.lightIntensity*LnDl*nDl*A/(M_PIf * Ldist * Ldist);
-    prd->emitted = rt_data->emission_color;
-    prd->attenuation = prd->attenuation*diffuseColour;
+    prd->radiance = make_float3(0.0f, 0.0f, 0.0f);
+    if( nDl > 0.0f && LnDl > 0.0f )
+    {
+        const bool occluded = traceShadow(
+            params.handle,
+            P,
+            Ldir,
+            0.01f,         // tmin
+            Ldist - 0.01f  // tmax
+            );
 
+        if( !occluded )
+        {
+          prd->radiance = params.lightIntensity*LnDl*nDl*A/(M_PIf * Ldist * Ldist);
+          prd->emitted = rt_data->emission_color;
+          prd->attenuation = prd->attenuation*diffuseColour;
+        }
+    }
 }

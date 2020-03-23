@@ -356,9 +356,11 @@ int main()
   //
   // Create program groups, including NULL miss and hitgroups
   //
-  OptixProgramGroup raygen_prog_group   = nullptr;
-  OptixProgramGroup miss_prog_group     = nullptr;
-  OptixProgramGroup hitgroup_prog_group = nullptr;
+  OptixProgramGroup raygen_prog_group          = nullptr;
+  OptixProgramGroup miss_prog_group            = nullptr;
+  OptixProgramGroup hitgroup_prog_group        = nullptr;
+  OptixProgramGroup miss_prog_group_shadow     = nullptr;
+  OptixProgramGroup hitgroup_prog_group_shadow = nullptr;
   {
       OptixProgramGroupOptions program_group_options   = {}; // Initialize to zeros
 
@@ -408,6 +410,36 @@ int main()
                   &sizeof_log,
                   &hitgroup_prog_group
                   ) );
+
+      // Leave miss group's module and entryfunc name null
+      OptixProgramGroupDesc miss_prog_group_shadow_desc = {};
+      miss_prog_group_shadow_desc.kind = OPTIX_PROGRAM_GROUP_KIND_MISS;
+      sizeof_log = sizeof( log );
+      OPTIX_CHECK_LOG( optixProgramGroupCreate(
+                  context,
+                  &miss_prog_group_shadow_desc,
+                  1,   // num program groups
+                  &program_group_options,
+                  log,
+                  &sizeof_log,
+                  &miss_prog_group_shadow
+                  ) );
+
+      // Leave hit group's module and entryfunc name null
+      OptixProgramGroupDesc hitgroup_prog_group_shadow_desc = {};
+      hitgroup_prog_group_shadow_desc.kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
+      hitgroup_prog_group_shadow_desc.hitgroup.moduleCH = module;
+      hitgroup_prog_group_shadow_desc.hitgroup.entryFunctionNameCH = "__closesthit__shadow";
+      sizeof_log = sizeof( log );
+      OPTIX_CHECK_LOG( optixProgramGroupCreate(
+                  context,
+                  &hitgroup_prog_group_shadow_desc,
+                  1,   // num program groups
+                  &program_group_options,
+                  log,
+                  &sizeof_log,
+                  &hitgroup_prog_group_shadow
+                  ) );
   }
 
 
@@ -417,7 +449,7 @@ int main()
   //
   OptixPipeline pipeline = nullptr;
   {
-      OptixProgramGroup program_groups[] = { raygen_prog_group, miss_prog_group, hitgroup_prog_group };
+      OptixProgramGroup program_groups[] = { raygen_prog_group, miss_prog_group, hitgroup_prog_group, miss_prog_group_shadow, hitgroup_prog_group_shadow };
 
       OptixPipelineLinkOptions pipeline_link_options = {};
       pipeline_link_options.maxTraceDepth          = 5;
@@ -461,45 +493,51 @@ int main()
 
       CUdeviceptr miss_record;
       size_t      miss_record_size = sizeof( MissSbtRecord );
-      CUDA_CHECK( cudaMalloc( reinterpret_cast<void**>( &miss_record ), miss_record_size ) );
-      MissSbtRecord ms_sbt;
-      OPTIX_CHECK( optixSbtRecordPackHeader( miss_prog_group, &ms_sbt ) );
-      ms_sbt.data = {};
-      ms_sbt.data.backgroundColour = make_float3( 0.0f, 0.0f, 0.0f );
+      CUDA_CHECK( cudaMalloc( reinterpret_cast<void**>( &miss_record ), miss_record_size*2 ) );
+      MissSbtRecord ms_sbt[2];
+      OPTIX_CHECK( optixSbtRecordPackHeader( miss_prog_group, &ms_sbt[0] ) );
+      ms_sbt[0].data = {};
+      ms_sbt[0].data.backgroundColour = make_float3( 0.0f, 0.0f, 0.0f );
+      OPTIX_CHECK( optixSbtRecordPackHeader( miss_prog_group_shadow, &ms_sbt[1] ) );
+      ms_sbt[1].data = {};
+      ms_sbt[1].data.backgroundColour = make_float3( 0.0f, 0.0f, 0.0f );
       CUDA_CHECK( cudaMemcpy(
                   reinterpret_cast<void*>( miss_record ),
                   &ms_sbt,
-                  miss_record_size,
+                  miss_record_size*2,
                   cudaMemcpyHostToDevice
                   ) );
 
       CUdeviceptr hitgroup_record;
       size_t      hitgroup_record_size = sizeof( HitGroupSbtRecord );
-      CUDA_CHECK( cudaMalloc( reinterpret_cast<void**>( &hitgroup_record ), hitgroup_record_size*MAT_COUNT ) );
-      HitGroupSbtRecord hg_sbt[MAT_COUNT];
+      CUDA_CHECK( cudaMalloc( reinterpret_cast<void**>( &hitgroup_record ), hitgroup_record_size*MAT_COUNT*2 ) );
+      HitGroupSbtRecord hg_sbt[MAT_COUNT*2];
       for( int i = 0; i < MAT_COUNT; i++ )
       {
-          OPTIX_CHECK( optixSbtRecordPackHeader( hitgroup_prog_group, &hg_sbt[i] ) );
-          hg_sbt[i].data = {};
-          hg_sbt[i].data.emission_color = g_emission_colors[i];
-          hg_sbt[i].data.diffuse_color  = g_diffuse_colors[i];
-          hg_sbt[i].data.vertices       = reinterpret_cast<float4*>( d_vertices );
+          OPTIX_CHECK( optixSbtRecordPackHeader( hitgroup_prog_group, &hg_sbt[2*i] ) );
+          hg_sbt[2*i].data = {};
+          hg_sbt[2*i].data.emission_color = g_emission_colors[i];
+          hg_sbt[2*i].data.diffuse_color  = g_diffuse_colors[i];
+          hg_sbt[2*i].data.vertices       = reinterpret_cast<float4*>( d_vertices );
+
+          hg_sbt[2*i+1].data = {};
+          OPTIX_CHECK( optixSbtRecordPackHeader( hitgroup_prog_group_shadow, &hg_sbt[2*i + 1] ) );
       }
 
       CUDA_CHECK( cudaMemcpy(
                   reinterpret_cast<void*>( hitgroup_record ),
                   hg_sbt,
-                  hitgroup_record_size*MAT_COUNT,
+                  hitgroup_record_size*MAT_COUNT*2,
                   cudaMemcpyHostToDevice
                   ) );
 
       sbt.raygenRecord                = raygen_record;
       sbt.missRecordBase              = miss_record;
       sbt.missRecordStrideInBytes     = static_cast<uint32_t>( miss_record_size );
-      sbt.missRecordCount             = 1;
+      sbt.missRecordCount             = 2;
       sbt.hitgroupRecordBase          = hitgroup_record;
       sbt.hitgroupRecordStrideInBytes = static_cast<uint32_t>( hitgroup_record_size );
-      sbt.hitgroupRecordCount         = MAT_COUNT;
+      sbt.hitgroupRecordCount         = MAT_COUNT*2;
   }
 
   CUDAOutputBuffer<uchar4> output_buffer( CUDAOutputBufferType::CUDA_DEVICE, width, height );
