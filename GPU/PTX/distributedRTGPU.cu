@@ -46,7 +46,7 @@ struct RadiancePRD
     float3   attenuation;
     float3   origin;
     float3   direction;
-    //uint32_t seed;
+    uint32_t seed;
     //int32_t  countEmitted;
     int32_t  done;
     //int32_t  pad;
@@ -176,6 +176,8 @@ extern "C" __global__ void __raygen__rg()
             static_cast<float>( idx.y ) / static_cast<float>( dim.y )
             ) - 1.0f;
 
+    uint32_t seed = tea<4>( idx.y*params.image_width + idx.x, 0u );
+
     float3 origin      = rtData->cameraPos;
     //-ve as index x is left to right and index y is top to bottom
     //whereas coordinate space x is right to left (change?) and y is bottom to top
@@ -185,24 +187,31 @@ extern "C" __global__ void __raygen__rg()
     prd.radiance     = make_float3(0.f);
     prd.attenuation  = make_float3(1.f);
     prd.done         = false;
+    prd.seed         = seed;
+
     const int depth = 2;
-    int iters = 0;
+    const int numSamples = 32;
     float3 colour = make_float3(0.0f, 0.0f, 0.0f);
-    while (iters < depth && !prd.done){
 
-      trace( params.handle,
-              origin,
-              direction,
-              0.00f,  // tmin
-              1e16f,  // tmax
-              &prd );
+    for (int sample = 0; sample < numSamples; sample++){
+      int iters = 0;
+      while (iters < depth && !prd.done){
 
-      colour = colour + prd.radiance*prd.attenuation + prd.emitted;
-      origin = prd.origin;
-      direction = prd.direction;
+        trace( params.handle,
+                origin,
+                direction,
+                0.00f,  // tmin
+                1e16f,  // tmax
+                &prd );
 
-      iters = iters+1;
+        colour = colour + prd.radiance*prd.attenuation + prd.emitted;
+        origin = prd.origin;
+        direction = prd.direction;
+
+        iters = iters+1;
+      }
     }
+    //colour = colour/(float)numSamples;
     params.image[idx.y * params.image_width + idx.x] = make_colour(colour);
 }
 
@@ -233,11 +242,11 @@ extern "C" __global__ void __closesthit__ch()
     const float3 N    = faceforward( N_0, -ray_dir, N_0 );
     const float3 P    = optixGetWorldRayOrigin() + optixGetRayTmax()*ray_dir;
 
-    const float3 diffuseColour = rt_data->diffuse_color;
-    const float z1 = 0.5f; // make random
-    const float z2 = 0.5f; // make random
-
     RadiancePRD* prd = getPRD();
+
+    const float3 diffuseColour = rt_data->diffuse_color;
+    const float z1 = rnd(prd->seed);
+    const float z2 = rnd(prd->seed);
 
     float3 w_in;
     cosine_sample_hemisphere( z1, z2, w_in );
