@@ -47,7 +47,7 @@ struct RadiancePRD
     float3   origin;
     float3   direction;
     uint32_t seed;
-    //int32_t  countEmitted;
+    int32_t  countEmitted;
     int32_t  done;
     //int32_t  pad;
 
@@ -207,23 +207,26 @@ extern "C" __global__ void __raygen__rg()
 
     uint32_t seed = tea<4>( idx.y*params.image_width + idx.x, 0u );
 
-    float3 origin      = rtData->cameraPos;
-    //-ve as index x is left to right and index y is top to bottom
-    //whereas coordinate space x is right to left (change?) and y is bottom to top
-    float3 direction   = normalize( -1.0f*d.y * U + -1.0f*d.x * V + W );
-    RadiancePRD prd;
-    prd.emitted      = make_float3(0.f);
-    prd.radiance     = make_float3(0.f);
-    prd.attenuation  = make_float3(1.f);
-    prd.done         = false;
-    prd.seed         = seed;
-
     const int depth = 2;
     const int numSamples = 32;
     float3 colour = make_float3(0.0f, 0.0f, 0.0f);
 
+    RadiancePRD prd;
+    prd.seed         = seed;
+
     for (int sample = 0; sample < numSamples; sample++){
       int iters = 0;
+      prd.emitted      = make_float3(0.f);
+      prd.radiance     = make_float3(0.f);
+      prd.attenuation  = make_float3(1.f);
+      prd.countEmitted = true;
+      prd.done = false;
+
+      float3 origin      = rtData->cameraPos;
+      //-ve as index x is left to right and index y is top to bottom
+      //whereas coordinate space x is right to left (change?) and y is bottom to top
+      float3 direction   = normalize( -1.0f*d.y * U + -1.0f*d.x * V + W );
+
       while (iters < depth && !prd.done){
 
         trace( params.handle,
@@ -240,7 +243,7 @@ extern "C" __global__ void __raygen__rg()
         iters = iters+1;
       }
     }
-    //colour = colour/(float)numSamples;
+    colour = colour/(float)numSamples;
     params.image[idx.y * params.image_width + idx.x] = make_colour(colour);
 }
 
@@ -273,22 +276,38 @@ extern "C" __global__ void __closesthit__ch()
     const float3 N_0  = normalize( cross( v1-v0, v2-v0 ) );
 
     const float3 N    = faceforward( N_0, -ray_dir, N_0 );
-    const float3 P    = optixGetWorldRayOrigin() + optixGetRayTmax()*ray_dir;
+    const float3 P    = optixGetWorldRayOrigin() + optixGetRayTmax()*ray_dir + 0.1f*N;
 
     RadiancePRD* prd = getPRD();
 
-    const float3 diffuseColour = rt_data->diffuse_color;
-    const float z1 = rnd(prd->seed);
-    const float z2 = rnd(prd->seed);
+    if (prd->countEmitted) {
+      prd->emitted = rt_data->emission_color;
+    }
+    else {
+      prd->emitted = make_float3(0.0f, 0.0f, 0.0f);
+    }
 
+    const float3 diffuseColour = rt_data->diffuse_color;
+
+    uint32_t seed = prd->seed;
+    const float z1 = rnd(seed);
+    const float z2 = rnd(seed);
+
+    //float3 w_in = 2.0f*dot(ray_dir, N) - ray_dir;
     float3 w_in;
     cosine_sample_hemisphere( z1, z2, w_in );
     Onb onb( N );
     onb.inverse_transform( w_in );
     prd->direction = w_in;
     prd->origin    = P;
+    prd->attenuation = prd->attenuation*diffuseColour;
+    prd->countEmitted = false;
 
-    const float3 lightPosSample = params.lightPos + params.lightV1 * z1 + params.lightV2 * z2;
+    const float zz1 = rnd(seed);
+    const float zz2 = rnd(seed);
+    prd->seed = seed;
+
+    const float3 lightPosSample = params.lightPos + params.lightV1 * zz1 + params.lightV2 * zz2;
 
     const float  Ldist = length(lightPosSample - P );
     const float3 Ldir  = normalize(lightPosSample - P );
@@ -296,7 +315,7 @@ extern "C" __global__ void __closesthit__ch()
     const float  LnDl  = -dot( params.lightNorm, Ldir );
     const float A = length(cross(params.lightV1, params.lightV2));
 
-    prd->radiance = make_float3(0.0f, 0.0f, 0.0f);
+    //prd->radiance = make_float3(0.0f, 0.0f, 0.0f);
     if( nDl > 0.0f && LnDl > 0.0f )
     {
         const bool occluded = traceShadow(
@@ -309,9 +328,7 @@ extern "C" __global__ void __closesthit__ch()
 
         if( !occluded )
         {
-          prd->radiance = params.lightIntensity*LnDl*nDl*A/(M_PIf * Ldist * Ldist);
-          prd->emitted = rt_data->emission_color;
-          prd->attenuation = prd->attenuation*diffuseColour;
+          prd->radiance = prd->radiance + params.lightIntensity*LnDl*nDl*A/(M_PIf * Ldist * Ldist);
         }
     }
 }

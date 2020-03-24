@@ -480,7 +480,7 @@ int main()
       RayGenSbtRecord rg_sbt;
       OPTIX_CHECK( optixSbtRecordPackHeader( raygen_prog_group, &rg_sbt ) );
       rg_sbt.data = {};
-      rg_sbt.data.cameraPos     = make_float3( 278.0f, 273.0f, -600.0f );
+      rg_sbt.data.cameraPos     = make_float3( 278.0f, 273.0f, -100.0f );
       rg_sbt.data.cameraRight   = make_float3( 1.0f, 0.0f, 0.0f );
       rg_sbt.data.cameraUp      = make_float3( 0.0f, 1.0f, 0.0f );
       rg_sbt.data.cameraForward = make_float3( 0.0f, 0.0f, 1.0f );
