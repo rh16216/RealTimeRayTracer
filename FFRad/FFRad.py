@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 
 import math
+import time
 # Floor  -- white lambert
 #{    0.0,    0.0,    0.0, 0.0 },
 #{    0.0,    0.0,  559.2, 0.0 },
@@ -93,17 +94,17 @@ def createBasicMesh(minX, maxX, minY, maxY, minZ, maxZ, numDivides):
         dimZ = torch.arange(minZ, maxZ, stepZ)
 
     meshGrid = torch.cartesian_prod(dimX, dimY, dimZ)
-    print(meshGrid.size())
+    #print(meshGrid.size())
 
     centreGrid = torch.add(meshGrid, torch.tensor([stepX/2.0, stepY/2.0, stepZ/2.0]))
-    print(centreGrid.size())
+    #print(centreGrid.size())
 
     mesh = Mesh(stepX, stepY, stepZ, meshGrid, centreGrid)
 
     return mesh
 
 
-def calculateFFGrid(mesh1, mesh2):
+def calculateFFGridPair(mesh1, mesh2):
     ffGrid = torch.zeros(100, 100) #TODO: calculate from input mesh
 
     for index1, centre1 in enumerate(mesh1.centreGrid):
@@ -122,8 +123,25 @@ def calculateFFGrid(mesh1, mesh2):
 
     return ffGrid
 
+def calculateFFGrid(meshList):
+    ffGridPair = torch.zeros(100, 100) #TODO: calculate from input mesh
+    ffGrid = torch.zeros(500, 500) #TODO: calculate from input mesh
+    for index1, mesh1 in enumerate(meshList):
+        for index2, mesh2 in enumerate(meshList):
+            if (index1 == index2):
+                ffGridPair = torch.zeros(100, 100) #TODO: calculate from input mesh
+            else:
+                ffGridPair = calculateFFGridPair(mesh1, mesh2)
 
-numPatches = 10
+            for i in range(0, 100):
+                for j in range(0, 100):
+                    ffGrid[100*index1+i][100*index2+j] = ffGridPair[i][j]
+
+
+    return ffGrid
+
+
+numPatches = 500
 numBounces = 2
 
 # Create random Tensor to hold input
@@ -132,10 +150,11 @@ print(x)
 print(torch.sum(x))
 
 class FFNet(nn.Module):
-    def __init__(self):
+    def __init__(self, ffGrid):
         super(FFNet, self).__init__()
-        self.fc = nn.Linear(10, 10)
-        self.fc.weight = torch.nn.Parameter(torch.ones_like(self.fc.weight))
+        self.fc = nn.Linear(numPatches, numPatches)
+        #self.fc.weight = torch.nn.Parameter(torch.ones_like(self.fc.weight))
+        self.fc.weight = torch.nn.Parameter(ffGrid)
         self.fc.bias = torch.nn.Parameter(torch.ones_like(self.fc.bias))
 
     def forward(self, x):
@@ -145,16 +164,20 @@ class FFNet(nn.Module):
         return x
 
 
-model = FFNet()
-
-y_pred = model(x)
-
 floorMesh     = createBasicMesh(0.0, 556.0, 0.0, 0.0, 0.0, 559.2, 10)
 ceilingMesh   = createBasicMesh(0.0, 556.0, 548.8, 548.8, 0.0, 559.2, 10)
 backWallMesh  = createBasicMesh(0.0, 556.0, 0.0, 548.8, 559.2, 559.2, 10)
 rightWallMesh = createBasicMesh(0.0, 0.0, 0.0, 548.8, 0.0, 559.2, 10)
 leftWallMesh  = createBasicMesh(556.0, 556.0, 0.0, 548.8, 0.0, 559.2, 10)
 
-print(y_pred)
+meshList = [floorMesh, ceilingMesh, backWallMesh, rightWallMesh, leftWallMesh]
 
-calculateFFGrid(leftWallMesh, rightWallMesh)
+ffGrid = calculateFFGrid(meshList)
+#print(ffGrid)
+
+model = FFNet(ffGrid)
+
+print(time.perf_counter())
+y_pred = model(x)
+print(time.perf_counter())
+print(y_pred)
