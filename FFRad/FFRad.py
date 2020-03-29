@@ -141,13 +141,48 @@ def calculateFFGrid(meshList):
     return ffGrid
 
 
+def projectToScreen(meshList, width, height):
+
+    focalLength = height/2
+    cameraPos = torch.tensor([278.0, 273.0, -300.0])
+
+    screen = torch.zeros(height, width, 3)
+
+    for mesh in meshList:
+        for vertex in mesh.meshGrid:
+            vertexC = vertex - cameraPos
+            projectedVertex = vertexC*focalLength/vertexC[2] + torch.tensor([width/2, height/2, 0.0])
+            projectedX = round(projectedVertex[0].item())
+            projectedY = round(projectedVertex[1].item())
+            screen[projectedY][projectedX] = torch.tensor([255.0, 255.0, 255.0])
+
+    return screen
+
+def writePPM(data, width, height, fileName):
+    f = open(fileName, "w+")
+
+    f.write("P3 \n")
+    f.write(str(width) + " " + str(height) + "\n")
+    f.write("255 \n")
+
+    for y in range(0, height):
+        for x in range(0, width):
+            f.write(str(int(data[y][x][0].item())) + " ")
+            f.write(str(int(data[y][x][1].item())) + " ")
+            f.write(str(int(data[y][x][2].item())) + " ")
+            f.write(" ")
+        f.write("\n")
+
+    f.close()
+
+
 numPatches = 500
 numBounces = 2
 
 # Create random Tensor to hold input
 x = torch.randn(1, numPatches)
-print(x)
-print(torch.sum(x))
+#print(x)
+#print(torch.sum(x))
 
 class FFNet(nn.Module):
     def __init__(self, ffGrid):
@@ -172,7 +207,9 @@ leftWallMesh  = createBasicMesh(556.0, 556.0, 0.0, 548.8, 0.0, 559.2, 10)
 
 meshList = [floorMesh, ceilingMesh, backWallMesh, rightWallMesh, leftWallMesh]
 
-ffGrid = calculateFFGrid(meshList)
+#print(time.perf_counter())
+ffGrid = calculateFFGrid(meshList) #TODO: Pickle this and load in values
+#print(time.perf_counter())
 #print(ffGrid)
 
 model = FFNet(ffGrid)
@@ -180,4 +217,11 @@ model = FFNet(ffGrid)
 print(time.perf_counter())
 y_pred = model(x)
 print(time.perf_counter())
-print(y_pred)
+#print(y_pred)
+
+width = 512
+height = 512
+
+data = projectToScreen(meshList, width, height)
+
+writePPM(data, width, height, "output.ppm")
