@@ -163,12 +163,65 @@ def drawLine(vertex0X, vertex0Y, vertex1X, vertex1Y, colour, screen):
      yDiff = vertex1Y - vertex0Y
      numSteps = max(abs(xDiff), abs(yDiff))
 
-     xStep = xDiff/numSteps
-     yStep = yDiff/numSteps
+     if (numSteps == 0):
+         screen[round(vertex0Y)][round(vertex0X)] = colour
+     else:
+         xStep = xDiff/numSteps
+         yStep = yDiff/numSteps
 
-     for step in range(0, numSteps+1):
-         screen[round(vertex0Y + yStep*step)][round(vertex0X + xStep*step)] = colour
+         for step in range(0, numSteps+1):
+             screen[round(vertex0Y + yStep*step)][round(vertex0X + xStep*step)] = colour
 
+
+def calculateLine(vertex0X, vertex0Y, vertex1X, vertex1Y):
+    xDiff = vertex1X - vertex0X
+    yDiff = vertex1Y - vertex0Y
+    numSteps = max(abs(xDiff), abs(yDiff))
+
+    xStep = xDiff/numSteps
+    yStep = yDiff/numSteps
+
+    lineList = []
+    for step in range(0, numSteps+1):
+        lineList.append((round(vertex0Y + yStep*step), round(vertex0X + xStep*step)))
+
+    return lineList
+
+def fillPatch(line0, line1, line2, line3, colour, screen):
+    maxY = int(max(line0[0][1], line1[0][1], line2[0][1], line3[0][1]))
+    minY = int(min(line0[0][1], line1[0][1], line2[0][1], line3[0][1]))
+    yDiff = (maxY - minY)+1
+
+    maxXs = [-math.inf]*yDiff
+    minXs = [math.inf]*yDiff
+
+    for pixel in line0:
+        if (pixel[0] < minXs[pixel[1]-minY]):
+            minXs[pixel[1]-minY] = pixel[0]
+        if (pixel[0] > maxXs[pixel[1]-minY]):
+            maxXs[pixel[1]-minY] = pixel[0]
+
+    for pixel in line1:
+        if (pixel[0] < minXs[pixel[1]-minY]):
+            minXs[pixel[1]-minY] = pixel[0]
+        if (pixel[0] > maxXs[pixel[1]-minY]):
+            maxXs[pixel[1]-minY] = pixel[0]
+
+    for pixel in line2:
+        if (pixel[0] < minXs[pixel[1]-minY]):
+            minXs[pixel[1]-minY] = pixel[0]
+        if (pixel[0] > maxXs[pixel[1]-minY]):
+            maxXs[pixel[1]-minY] = pixel[0]
+
+    for pixel in line3:
+        if (pixel[0] < minXs[pixel[1]-minY]):
+            minXs[pixel[1]-minY] = pixel[0]
+        if (pixel[0] > maxXs[pixel[1]-minY]):
+            maxXs[pixel[1]-minY] = pixel[0]
+
+
+    for index in range(0, yDiff):
+        drawLine(minXs[index], minY+index, maxXs[index], minY+index, colour, screen)
 
 def projectVertex(vertex, focalLength, width, height):
     projectedVertex = vertex*focalLength/vertex[2] + torch.tensor([width/2, height/2, 0.0])
@@ -189,7 +242,7 @@ def projectToScreen(meshList, width, height):
     screen = torch.zeros(height, width, 3)
 
     for mesh in meshList:
-        for vertex in mesh.meshGrid:
+        for index, vertex in enumerate(mesh.meshGrid):
             vertex0 = vertex - cameraPos
             vertex1, vertex2, vertex3 = mesh.calculatePatchVertices(vertex0)
 
@@ -198,10 +251,12 @@ def projectToScreen(meshList, width, height):
             projectedVertex2X, projectedVertex2Y = projectVertex(vertex2, focalLength, width, height)
             projectedVertex3X, projectedVertex3Y = projectVertex(vertex3, focalLength, width, height)
 
-            drawLine(projectedVertex0X, projectedVertex0Y, projectedVertex1X, projectedVertex1Y, torch.tensor([255.0, 255.0, 255.0]), screen)
-            drawLine(projectedVertex1X, projectedVertex1Y, projectedVertex2X, projectedVertex2Y, torch.tensor([255.0, 0.0, 0.0]), screen)
-            drawLine(projectedVertex2X, projectedVertex2Y, projectedVertex3X, projectedVertex3Y, torch.tensor([0.0, 255.0, 0.0]), screen)
-            drawLine(projectedVertex3X, projectedVertex3Y, projectedVertex0X, projectedVertex0Y, torch.tensor([0.0, 0.0, 255.0]), screen)
+            line0 = calculateLine(projectedVertex0X, projectedVertex0Y, projectedVertex1X, projectedVertex1Y)
+            line1 = calculateLine(projectedVertex1X, projectedVertex1Y, projectedVertex2X, projectedVertex2Y)
+            line2 = calculateLine(projectedVertex2X, projectedVertex2Y, projectedVertex3X, projectedVertex3Y)
+            line3 = calculateLine(projectedVertex3X, projectedVertex3Y, projectedVertex0X, projectedVertex0Y)
+
+            fillPatch(line0, line1, line2, line3, torch.tensor([0.0, 0.0, 50.0*(index%6)]), screen)
             #screen[projectedVertex1Y][projectedVertex1X] = torch.tensor([255.0, 255.0, 255.0])
             #screen[projectedVertex2Y][projectedVertex2X] = torch.tensor([255.0, 0.0, 0.0])
             #screen[projectedVertex3Y][projectedVertex3X] = torch.tensor([0.0, 0.0, 255.0])
