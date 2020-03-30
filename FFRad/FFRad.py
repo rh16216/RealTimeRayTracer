@@ -67,6 +67,24 @@ class Mesh:
 
         return norm
 
+    def calculatePatchVertices(self, vertex):
+        if (self.stepX == 0):
+            vertex1 = vertex + torch.tensor([0.0, 0.0, self.stepZ])
+            vertex2 = vertex1 + torch.tensor([0.0, self.stepY, 0.0])
+            vertex3 = vertex2 - torch.tensor([0.0, 0.0, self.stepZ])
+
+        if (self.stepY == 0):
+            vertex1 = vertex + torch.tensor([self.stepX, 0.0, 0.0])
+            vertex2 = vertex1 + torch.tensor([0.0, 0.0, self.stepZ])
+            vertex3 = vertex2 - torch.tensor([self.stepX, 0.0, 0.0])
+
+        if (self.stepZ == 0):
+            vertex1 = vertex + torch.tensor([self.stepX, 0.0, 0.0 ])
+            vertex2 = vertex1 + torch.tensor([0.0, self.stepY, 0.0])
+            vertex3 = vertex2 - torch.tensor([self.stepX, 0.0, 0.0])
+
+        return vertex1, vertex2, vertex3
+
 
 def createBasicMesh(minX, maxX, minY, maxY, minZ, maxZ, numDivides):
     ignoreX = (minX == maxX)
@@ -140,21 +158,53 @@ def calculateFFGrid(meshList):
 
     return ffGrid
 
+def drawLine(vertex0X, vertex0Y, vertex1X, vertex1Y, colour, screen):
+     xDiff = vertex1X - vertex0X
+     yDiff = vertex1Y - vertex0Y
+     numSteps = max(abs(xDiff), abs(yDiff))
+
+     xStep = xDiff/numSteps
+     yStep = yDiff/numSteps
+
+     for step in range(0, numSteps+1):
+         screen[round(vertex0Y + yStep*step)][round(vertex0X + xStep*step)] = colour
+
+
+def projectVertex(vertex, focalLength, width, height):
+    projectedVertex = vertex*focalLength/vertex[2] + torch.tensor([width/2, height/2, 0.0])
+
+    #negating due to swap in direction of X and Y
+    projectedVertexX = round(-1.0*projectedVertex[0].item())
+    projectedVertexY = round(-1.0*projectedVertex[1].item())
+
+    return projectedVertexX, projectedVertexY
+
+
 
 def projectToScreen(meshList, width, height):
 
     focalLength = height/2
-    cameraPos = torch.tensor([278.0, 273.0, -300.0])
+    cameraPos = torch.tensor([278.0, 273.0, -600.0])
 
     screen = torch.zeros(height, width, 3)
 
     for mesh in meshList:
         for vertex in mesh.meshGrid:
-            vertexC = vertex - cameraPos
-            projectedVertex = vertexC*focalLength/vertexC[2] + torch.tensor([width/2, height/2, 0.0])
-            projectedX = round(projectedVertex[0].item())
-            projectedY = round(projectedVertex[1].item())
-            screen[projectedY][projectedX] = torch.tensor([255.0, 255.0, 255.0])
+            vertex0 = vertex - cameraPos
+            vertex1, vertex2, vertex3 = mesh.calculatePatchVertices(vertex0)
+
+            projectedVertex0X, projectedVertex0Y = projectVertex(vertex0, focalLength, width, height)
+            projectedVertex1X, projectedVertex1Y = projectVertex(vertex1, focalLength, width, height)
+            projectedVertex2X, projectedVertex2Y = projectVertex(vertex2, focalLength, width, height)
+            projectedVertex3X, projectedVertex3Y = projectVertex(vertex3, focalLength, width, height)
+
+            drawLine(projectedVertex0X, projectedVertex0Y, projectedVertex1X, projectedVertex1Y, torch.tensor([255.0, 255.0, 255.0]), screen)
+            drawLine(projectedVertex1X, projectedVertex1Y, projectedVertex2X, projectedVertex2Y, torch.tensor([255.0, 0.0, 0.0]), screen)
+            drawLine(projectedVertex2X, projectedVertex2Y, projectedVertex3X, projectedVertex3Y, torch.tensor([0.0, 255.0, 0.0]), screen)
+            drawLine(projectedVertex3X, projectedVertex3Y, projectedVertex0X, projectedVertex0Y, torch.tensor([0.0, 0.0, 255.0]), screen)
+            #screen[projectedVertex1Y][projectedVertex1X] = torch.tensor([255.0, 255.0, 255.0])
+            #screen[projectedVertex2Y][projectedVertex2X] = torch.tensor([255.0, 0.0, 0.0])
+            #screen[projectedVertex3Y][projectedVertex3X] = torch.tensor([0.0, 0.0, 255.0])
 
     return screen
 
@@ -208,15 +258,15 @@ leftWallMesh  = createBasicMesh(556.0, 556.0, 0.0, 548.8, 0.0, 559.2, 10)
 meshList = [floorMesh, ceilingMesh, backWallMesh, rightWallMesh, leftWallMesh]
 
 #print(time.perf_counter())
-ffGrid = calculateFFGrid(meshList) #TODO: Pickle this and load in values
+#ffGrid = calculateFFGrid(meshList) #TODO: Pickle this and load in values
 #print(time.perf_counter())
 #print(ffGrid)
 
-model = FFNet(ffGrid)
+#model = FFNet(ffGrid)
 
-print(time.perf_counter())
-y_pred = model(x)
-print(time.perf_counter())
+#print(time.perf_counter())
+#y_pred = model(x)
+#print(time.perf_counter())
 #print(y_pred)
 
 width = 512
