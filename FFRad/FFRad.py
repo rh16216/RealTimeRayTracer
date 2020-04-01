@@ -3,6 +3,8 @@ import torch.nn as nn
 
 import math
 import time
+import pickle
+
 # Floor  -- white lambert
 #{    0.0,    0.0,    0.0, 0.0 },
 #{    0.0,    0.0,  559.2, 0.0 },
@@ -314,12 +316,11 @@ class FFNet(nn.Module):
 
 numPatches = 500
 numBounces = 3
-
+pickleSave = False #TODO: make command line arg
 # Create random Tensor to hold input
 x = torch.zeros(1, numPatches)
 #print(x)
 #print(torch.sum(x))
-
 
 floorMesh     = createBasicMesh(0.0, 556.0, 0.0, 0.0, 0.0, 559.2, 10)
 ceilingMesh   = createBasicMesh(0.0, 556.0, 548.8, 548.8, 0.0, 559.2, 10)
@@ -329,11 +330,23 @@ leftWallMesh  = createBasicMesh(556.0, 556.0, 0.0, 548.8, 0.0, 559.2, 10)
 
 meshList = [floorMesh, ceilingMesh, backWallMesh, rightWallMesh, leftWallMesh]
 
-#print(time.perf_counter())
-ffGrid = calculateFFGrid(meshList) #TODO: Pickle this and load in values
-#print(time.perf_counter())
-#print(ffGrid)
-#print(torch.max(ffGrid))
+if (pickleSave):
+
+    #print(time.perf_counter())
+    ffGrid = calculateFFGrid(meshList) #TODO: Pickle this and load in values
+    #print(time.perf_counter())
+    #print(ffGrid)
+    #print(torch.max(ffGrid))
+
+    pickle_out = open("ffGrid.pickle","wb")
+    pickle.dump(ffGrid, pickle_out)
+    pickle_out.close()
+
+else:
+
+    pickle_in = open("ffGrid.pickle","rb")
+    ffGrid = pickle.load(pickle_in)
+    pickle_in.close()
 
 model = FFNet(ffGrid)
 
