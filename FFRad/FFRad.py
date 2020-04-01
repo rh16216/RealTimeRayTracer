@@ -55,15 +55,16 @@ class Mesh:
 
         return dimX*dimY*dimZ
 
-    def norm(self):
+    def norm(self, patchCentre):
         norm = torch.tensor([0.0, 0.0, 0.0])
         if (self.stepX == 0.0): norm = torch.tensor([1.0, 0.0, 0.0])
         if (self.stepY == 0.0): norm = torch.tensor([0.0, 1.0, 0.0])
         if (self.stepZ == 0.0): norm = torch.tensor([0.0, 0.0, 1.0])
 
-        centre = torch.tensor([278.0, 274.4, 279.6])
-        centreDot = -1.0*(norm[0]*centre[0] + norm[1]*centre[1] + norm[2]*centre[2])
-        if (centreDot < 0): norm = -1.0*norm
+        centre = torch.tensor([278.0, 274.4, 279.6]) - patchCentre
+        centreDot = norm[0]*centre[0] + norm[1]*centre[1] + norm[2]*centre[2]
+        if (centreDot < 0):
+            norm = -1.0*norm
 
         return norm
 
@@ -130,8 +131,8 @@ def calculateFFGridPair(mesh1, mesh2):
             diff = centre1 - centre2
             diffLength = math.sqrt(diff[0]*diff[0] + diff[1]*diff[1] + diff[2]*diff[2])
             diffDir = diff/diffLength
-            centre1Norm = mesh1.norm()
-            centre2Norm = mesh2.norm()
+            centre1Norm = mesh1.norm(centre1)
+            centre2Norm = mesh2.norm(centre2)
             dot1 = -1.0*(centre1Norm[0]*diffDir[0] + centre1Norm[1]*diffDir[1] + centre1Norm[2]*diffDir[2])
             dot1 = max(dot1, 0.0)
             dot2 = centre2Norm[0]*diffDir[0] + centre2Norm[1]*diffDir[1] + centre2Norm[2]*diffDir[2]
@@ -260,7 +261,8 @@ def projectToScreen(meshList, colours, width, height):
 
             light = colours[100*meshIndex + vertIndex].item()
 
-            colour = torch.tensor([100.0, 100.0, 100.0])*light
+            colour = torch.tensor([255.0, 255.0, 255.0])*light
+            colour = torch.clamp(colour, min=0.0, max=255.0)
 
             fillPatch(line0, line1, line2, line3, colour, screen)
             #screen[projectedVertex1Y][projectedVertex1X] = torch.tensor([255.0, 255.0, 255.0])
@@ -294,16 +296,13 @@ class FFNet(nn.Module):
         super(FFNet, self).__init__()
         self.fc = nn.Linear(numPatches, numPatches)
         self.fc.weight = torch.nn.Parameter(ffGrid)
-        #bias = torch.ones_like(self.fc.bias)
-        #bias[149] = 0.5
-        #bias[150] = 0.5
-        #bias[151] = 0.5
-        #bias[152] = 0.5
-        #self.fc.bias = torch.nn.Parameter(torch.ones_like(self.fc.bias))
-        self.fc.bias = torch.nn.Parameter(torch.arange(0, 1, 0.002))
+        bias = torch.zeros_like(self.fc.bias)
+        bias[144] = 15.0
+        bias[145] = 15.0
+        bias[154] = 15.0
+        bias[155] = 15.0
+        self.fc.bias = torch.nn.Parameter(bias)
 
-        print (self.fc.weight.size())
-        print (self.fc.bias.size())
 
     def forward(self, x):
         with torch.no_grad():
@@ -314,7 +313,7 @@ class FFNet(nn.Module):
 
 
 numPatches = 500
-numBounces = 1
+numBounces = 3
 
 # Create random Tensor to hold input
 x = torch.zeros(1, numPatches)
@@ -334,12 +333,14 @@ meshList = [floorMesh, ceilingMesh, backWallMesh, rightWallMesh, leftWallMesh]
 ffGrid = calculateFFGrid(meshList) #TODO: Pickle this and load in values
 #print(time.perf_counter())
 #print(ffGrid)
+#print(torch.max(ffGrid))
 
 model = FFNet(ffGrid)
 
-print(time.perf_counter())
+start = time.perf_counter()
 rad = model(x)
-print(time.perf_counter())
+stop = time.perf_counter()
+print("runtime: " + str(stop - start))
 rad = torch.squeeze(rad)
 #print(rad)
 #print(rad.size())
