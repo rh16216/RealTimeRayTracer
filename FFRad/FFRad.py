@@ -133,7 +133,9 @@ def calculateFFGridPair(mesh1, mesh2):
             centre1Norm = mesh1.norm()
             centre2Norm = mesh2.norm()
             dot1 = -1.0*(centre1Norm[0]*diffDir[0] + centre1Norm[1]*diffDir[1] + centre1Norm[2]*diffDir[2])
+            dot1 = max(dot1, 0.0)
             dot2 = centre2Norm[0]*diffDir[0] + centre2Norm[1]*diffDir[1] + centre2Norm[2]*diffDir[2]
+            dot2 = max(dot2, 0.0)
             area2 = mesh2.area()
 
             ffGrid[index1][index2] = dot1*dot2*area2/(3.14*diffLength*diffLength)
@@ -183,7 +185,7 @@ def calculateLine(vertex0X, vertex0Y, vertex1X, vertex1Y):
 
     lineList = []
     for step in range(0, numSteps+1):
-        lineList.append((round(vertex0Y + yStep*step), round(vertex0X + xStep*step)))
+        lineList.append((round(vertex0X + xStep*step), round(vertex0Y + yStep*step)))
 
     return lineList
 
@@ -234,15 +236,15 @@ def projectVertex(vertex, focalLength, width, height):
 
 
 
-def projectToScreen(meshList, width, height):
+def projectToScreen(meshList, colours, width, height):
 
     focalLength = height/2
     cameraPos = torch.tensor([278.0, 273.0, -600.0])
 
     screen = torch.zeros(height, width, 3)
 
-    for mesh in meshList:
-        for index, vertex in enumerate(mesh.meshGrid):
+    for meshIndex, mesh in enumerate(meshList):
+        for vertIndex, vertex in enumerate(mesh.meshGrid):
             vertex0 = vertex - cameraPos
             vertex1, vertex2, vertex3 = mesh.calculatePatchVertices(vertex0)
 
@@ -256,7 +258,11 @@ def projectToScreen(meshList, width, height):
             line2 = calculateLine(projectedVertex2X, projectedVertex2Y, projectedVertex3X, projectedVertex3Y)
             line3 = calculateLine(projectedVertex3X, projectedVertex3Y, projectedVertex0X, projectedVertex0Y)
 
-            fillPatch(line0, line1, line2, line3, torch.tensor([0.0, 0.0, 50.0*(index%6)]), screen)
+            light = colours[100*meshIndex + vertIndex].item()
+
+            colour = torch.tensor([100.0, 100.0, 100.0])*light
+
+            fillPatch(line0, line1, line2, line3, colour, screen)
             #screen[projectedVertex1Y][projectedVertex1X] = torch.tensor([255.0, 255.0, 255.0])
             #screen[projectedVertex2Y][projectedVertex2X] = torch.tensor([255.0, 0.0, 0.0])
             #screen[projectedVertex3Y][projectedVertex3X] = torch.tensor([0.0, 0.0, 255.0])
@@ -264,11 +270,13 @@ def projectToScreen(meshList, width, height):
     return screen
 
 def writePPM(data, width, height, fileName):
+    max = str(int(torch.max(data).item()))
+
     f = open(fileName, "w+")
 
     f.write("P3 \n")
     f.write(str(width) + " " + str(height) + "\n")
-    f.write("255 \n")
+    f.write(max + " \n")
 
     for y in range(0, height):
         for x in range(0, width):
@@ -281,27 +289,37 @@ def writePPM(data, width, height, fileName):
     f.close()
 
 
-numPatches = 500
-numBounces = 2
-
-# Create random Tensor to hold input
-x = torch.randn(1, numPatches)
-#print(x)
-#print(torch.sum(x))
-
 class FFNet(nn.Module):
     def __init__(self, ffGrid):
         super(FFNet, self).__init__()
         self.fc = nn.Linear(numPatches, numPatches)
-        #self.fc.weight = torch.nn.Parameter(torch.ones_like(self.fc.weight))
         self.fc.weight = torch.nn.Parameter(ffGrid)
-        self.fc.bias = torch.nn.Parameter(torch.ones_like(self.fc.bias))
+        #bias = torch.ones_like(self.fc.bias)
+        #bias[149] = 0.5
+        #bias[150] = 0.5
+        #bias[151] = 0.5
+        #bias[152] = 0.5
+        #self.fc.bias = torch.nn.Parameter(torch.ones_like(self.fc.bias))
+        self.fc.bias = torch.nn.Parameter(torch.arange(0, 1, 0.002))
+
+        print (self.fc.weight.size())
+        print (self.fc.bias.size())
 
     def forward(self, x):
         with torch.no_grad():
             for bounces in range(0, numBounces):
                 x = self.fc(x)
         return x
+
+
+
+numPatches = 500
+numBounces = 1
+
+# Create random Tensor to hold input
+x = torch.zeros(1, numPatches)
+#print(x)
+#print(torch.sum(x))
 
 
 floorMesh     = createBasicMesh(0.0, 556.0, 0.0, 0.0, 0.0, 559.2, 10)
@@ -313,20 +331,22 @@ leftWallMesh  = createBasicMesh(556.0, 556.0, 0.0, 548.8, 0.0, 559.2, 10)
 meshList = [floorMesh, ceilingMesh, backWallMesh, rightWallMesh, leftWallMesh]
 
 #print(time.perf_counter())
-#ffGrid = calculateFFGrid(meshList) #TODO: Pickle this and load in values
+ffGrid = calculateFFGrid(meshList) #TODO: Pickle this and load in values
 #print(time.perf_counter())
 #print(ffGrid)
 
-#model = FFNet(ffGrid)
+model = FFNet(ffGrid)
 
-#print(time.perf_counter())
-#y_pred = model(x)
-#print(time.perf_counter())
-#print(y_pred)
+print(time.perf_counter())
+rad = model(x)
+print(time.perf_counter())
+rad = torch.squeeze(rad)
+#print(rad)
+#print(rad.size())
 
 width = 512
 height = 512
 
-data = projectToScreen(meshList, width, height)
+data = projectToScreen(meshList, rad, width, height)
 
 writePPM(data, width, height, "output.ppm")
