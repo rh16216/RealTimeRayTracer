@@ -57,13 +57,13 @@ class Mesh:
 
         return dimX*dimY*dimZ
 
-    def norm(self, patchCentre):
+    def norm(self, vertex):
         norm = torch.tensor([0.0, 0.0, 0.0])
         if (self.stepX == 0.0): norm = torch.tensor([1.0, 0.0, 0.0])
         if (self.stepY == 0.0): norm = torch.tensor([0.0, 1.0, 0.0])
         if (self.stepZ == 0.0): norm = torch.tensor([0.0, 0.0, 1.0])
 
-        centre = torch.tensor([278.0, 274.4, 279.6]) - patchCentre
+        centre = torch.tensor([278.0, 274.4, 279.6]) - vertex
         centreDot = norm[0]*centre[0] + norm[1]*centre[1] + norm[2]*centre[2]
         if (centreDot < 0):
             norm = -1.0*norm
@@ -104,15 +104,15 @@ def createBasicMesh(minX, maxX, minY, maxY, minZ, maxZ, numDivides):
 
     if (not ignoreX):
         stepX = (maxX-minX)/numDivides
-        dimX = torch.arange(minX, maxX, stepX)
+        dimX = torch.arange(minX, maxX+1.0, stepX)
 
     if (not ignoreY):
         stepY = (maxY-minY)/numDivides
-        dimY = torch.arange(minY, maxY, stepY)
+        dimY = torch.arange(minY, maxY+1.0, stepY)
 
     if (not ignoreZ):
         stepZ = (maxZ-minZ)/numDivides
-        dimZ = torch.arange(minZ, maxZ, stepZ)
+        dimZ = torch.arange(minZ, maxZ+1.0, stepZ)
 
     meshGrid = torch.cartesian_prod(dimX, dimY, dimZ)
     #print(meshGrid.size())
@@ -126,56 +126,62 @@ def createBasicMesh(minX, maxX, minY, maxY, minZ, maxZ, numDivides):
 
 
 def calculateFFGridPair(mesh1, mesh2):
-    ffGrid = torch.zeros(100, 100) #TODO: calculate from input mesh
+    ffGrid = torch.zeros(121, 121) #TODO: calculate from input mesh
 
-    for index1, centre1 in enumerate(mesh1.centreGrid):
-        for index2, centre2 in enumerate(mesh2.centreGrid):
-            diff = centre1 - centre2
+    for index1, vertex1 in enumerate(mesh1.meshGrid):
+        for index2, vertex2 in enumerate(mesh2.meshGrid):
+            diff = vertex1 - vertex2
             diffLength = math.sqrt(diff[0]*diff[0] + diff[1]*diff[1] + diff[2]*diff[2])
-            diffDir = diff/diffLength
-            centre1Norm = mesh1.norm(centre1)
-            centre2Norm = mesh2.norm(centre2)
-            dot1 = -1.0*(centre1Norm[0]*diffDir[0] + centre1Norm[1]*diffDir[1] + centre1Norm[2]*diffDir[2])
-            dot1 = max(dot1, 0.0)
-            dot2 = centre2Norm[0]*diffDir[0] + centre2Norm[1]*diffDir[1] + centre2Norm[2]*diffDir[2]
-            dot2 = max(dot2, 0.0)
-            area2 = mesh2.area()
+            if (diffLength == 0.0):
+                ffGrid[index1][index2] = 0.0
 
-            ffGrid[index1][index2] = dot1*dot2*area2/(3.14*diffLength*diffLength)
+            else:
 
+                diffDir = diff/diffLength
+                vertex1Norm = mesh1.norm(vertex1)
+                vertex2Norm = mesh2.norm(vertex2)
+                dot1 = -1.0*(vertex1Norm[0]*diffDir[0] + vertex1Norm[1]*diffDir[1] + vertex1Norm[2]*diffDir[2])
+                dot1 = max(dot1, 0.0)
+                dot2 = vertex2Norm[0]*diffDir[0] + vertex2Norm[1]*diffDir[1] + vertex2Norm[2]*diffDir[2]
+                dot2 = max(dot2, 0.0)
+                area2 = mesh2.area()
+
+                ffGrid[index1][index2] = dot1*dot2*area2/(3.14*diffLength*diffLength)
 
     return ffGrid
 
 def calculateFFGrid(meshList):
-    ffGridPair = torch.zeros(100, 100) #TODO: calculate from input mesh
-    ffGrid = torch.zeros(500, 500) #TODO: calculate from input mesh
+    ffGridPair = torch.zeros(121, 121) #TODO: calculate from input mesh
+    ffGrid = torch.zeros(605, 605) #TODO: calculate from input mesh
     for index1, mesh1 in enumerate(meshList):
         for index2, mesh2 in enumerate(meshList):
             if (index1 == index2):
-                ffGridPair = torch.zeros(100, 100) #TODO: calculate from input mesh
+                ffGridPair = torch.zeros(121, 121) #TODO: calculate from input mesh
             else:
                 ffGridPair = calculateFFGridPair(mesh1, mesh2)
 
-            for i in range(0, 100):
-                for j in range(0, 100):
-                    ffGrid[100*index1+i][100*index2+j] = ffGridPair[i][j]
-
+            for i in range(0, 121):
+                for j in range(0, 121):
+                    ffGrid[121*index1+i][121*index2+j] = ffGridPair[i][j]
 
     return ffGrid
 
-def drawLine(vertex0X, vertex0Y, vertex1X, vertex1Y, colour, screen):
+def drawLine(vertex0X, vertex0Y, vertex1X, vertex1Y, colourStart, colourEnd, screen):
      xDiff = vertex1X - vertex0X
      yDiff = vertex1Y - vertex0Y
      numSteps = max(abs(xDiff), abs(yDiff))
 
      if (numSteps == 0):
-         screen[round(vertex0Y)][round(vertex0X)] = colour
+         screen[round(vertex0Y)][round(vertex0X)] = colourStart
      else:
          xStep = xDiff/numSteps
          yStep = yDiff/numSteps
 
+         colourDiff = colourEnd - colourStart
+         colourStep = colourDiff/numSteps
+
          for step in range(0, numSteps+1):
-             screen[round(vertex0Y + yStep*step)][round(vertex0X + xStep*step)] = colour
+             screen[round(vertex0Y + yStep*step)][round(vertex0X + xStep*step)] = colourStart + step*colourStep
 
 
 def calculateLine(vertex0X, vertex0Y, vertex1X, vertex1Y):
@@ -192,7 +198,7 @@ def calculateLine(vertex0X, vertex0Y, vertex1X, vertex1Y):
 
     return lineList
 
-def fillPatch(line0, line1, line2, line3, colour, screen):
+def fillPatch(line0, line1, line2, line3, colour0, colour1, colour2, colour3, screen):
     maxY = int(max(line0[0][1], line1[0][1], line2[0][1], line3[0][1]))
     minY = int(min(line0[0][1], line1[0][1], line2[0][1], line3[0][1]))
     yDiff = (maxY - minY)+1
@@ -224,9 +230,18 @@ def fillPatch(line0, line1, line2, line3, colour, screen):
         if (pixel[0] > maxXs[pixel[1]-minY]):
             maxXs[pixel[1]-minY] = pixel[0]
 
+    colourYDiffLeft = colour0 - colour1
+    colourYDiffRight = colour2 - colour3
+
+    colourYLeftStep = colourYDiffLeft/(yDiff-1)
+    colourYRightStep = colourYDiffRight/(yDiff-1)
+
 
     for index in range(0, yDiff):
-        drawLine(minXs[index], minY+index, maxXs[index], minY+index, colour, screen)
+        colourStart = colour3 + index*colourYRightStep
+        colourEnd   = colour1 + index*colourYLeftStep
+
+        drawLine(minXs[index], minY+index, maxXs[index], minY+index, colourStart, colourEnd, screen)
 
 def projectVertex(vertex, focalLength, width, height):
     projectedVertex = vertex*focalLength/vertex[2] + torch.tensor([width/2, height/2, 0.0])
@@ -261,19 +276,45 @@ def projectToScreen(meshList, colours, width, height):
             line2 = calculateLine(projectedVertex2X, projectedVertex2Y, projectedVertex3X, projectedVertex3Y)
             line3 = calculateLine(projectedVertex3X, projectedVertex3Y, projectedVertex0X, projectedVertex0Y)
 
-            light = colours[100*meshIndex + vertIndex].item()
+            if (((vertIndex+1)%11 != 0) and vertIndex < 109):
 
-            colour = torch.tensor([255.0, 255.0, 255.0])*light
-            colour = torch.clamp(colour, min=0.0, max=255.0)
+                light0 = colours[121*meshIndex + vertIndex].item()
+                light1 = colours[121*meshIndex + vertIndex + 1].item()
+                light2 = colours[121*meshIndex + vertIndex + 11].item()
+                light3 = colours[121*meshIndex + vertIndex + 12].item()
 
-            fillPatch(line0, line1, line2, line3, colour, screen)
-            #screen[projectedVertex1Y][projectedVertex1X] = torch.tensor([255.0, 255.0, 255.0])
-            #screen[projectedVertex2Y][projectedVertex2X] = torch.tensor([255.0, 0.0, 0.0])
-            #screen[projectedVertex3Y][projectedVertex3X] = torch.tensor([0.0, 0.0, 255.0])
+                colour0 = torch.tensor([255.0, 255.0, 255.0])*light0
+                colour0 = torch.clamp(colour0, min=0.0, max=255.0)
+
+                colour1 = torch.tensor([255.0, 255.0, 255.0])*light1
+                colour1 = torch.clamp(colour1, min=0.0, max=255.0)
+
+                colour2 = torch.tensor([255.0, 255.0, 255.0])*light2
+                colour2 = torch.clamp(colour2, min=0.0, max=255.0)
+
+                colour3 = torch.tensor([255.0, 255.0, 255.0])*light3
+                colour3 = torch.clamp(colour3, min=0.0, max=255.0)
+
+                #TODO: Fix colour indexing when forming cartesian product
+                if ((meshIndex == 0) or (meshIndex == 2)):
+                    fillPatch(line0, line1, line2, line3, colour0, colour1, colour2, colour3, screen)
+
+                if (meshIndex == 1):
+                    fillPatch(line0, line1, line2, line3, colour1, colour0, colour3, colour2, screen)
+
+                if (meshIndex == 3):
+                    fillPatch(line0, line1, line2, line3, colour0, colour2, colour1, colour3, screen)
+
+                if (meshIndex == 4):
+                    fillPatch(line0, line1, line2, line3, colour1, colour3, colour0, colour2, screen)
+                #screen[projectedVertex1Y][projectedVertex1X] = torch.tensor([255.0, 255.0, 255.0])
+                #screen[projectedVertex2Y][projectedVertex2X] = torch.tensor([255.0, 0.0, 0.0])
+                #screen[projectedVertex3Y][projectedVertex3X] = torch.tensor([0.0, 0.0, 255.0])
 
     return screen
 
 def writePPM(data, width, height, fileName):
+
     max = str(int(torch.max(data).item()))
 
     f = open(fileName, "w+")
@@ -299,10 +340,12 @@ class FFNet(nn.Module):
         self.fc = nn.Linear(numPatches, numPatches)
         self.fc.weight = torch.nn.Parameter(ffGrid)
         bias = torch.zeros_like(self.fc.bias)
-        bias[144] = 15.0
-        bias[145] = 15.0
-        bias[154] = 15.0
-        bias[155] = 15.0
+        bias[171] = 15.0
+        bias[172] = 15.0
+        bias[183] = 15.0
+        bias[184] = 15.0
+        bias[195] = 15.0
+        bias[196] = 15.0
         self.fc.bias = torch.nn.Parameter(bias)
 
 
@@ -314,7 +357,7 @@ class FFNet(nn.Module):
 
 
 
-numPatches = 500
+numPatches = 605
 numBounces = 3
 pickleSave = False #TODO: make command line arg
 # Create random Tensor to hold input
@@ -338,13 +381,13 @@ if (pickleSave):
     #print(ffGrid)
     #print(torch.max(ffGrid))
 
-    pickle_out = open("ffGrid.pickle","wb")
+    pickle_out = open("ffGridVertex.pickle","wb")
     pickle.dump(ffGrid, pickle_out)
     pickle_out.close()
 
 else:
 
-    pickle_in = open("ffGrid.pickle","rb")
+    pickle_in = open("ffGridVertex.pickle","rb")
     ffGrid = pickle.load(pickle_in)
     pickle_in.close()
 
