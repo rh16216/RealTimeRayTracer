@@ -35,6 +35,13 @@ import pickle
 #{  556.0,  548.8,  559.2,  0.0 },
 #{  556.0,  548.8,    0.0,  0.0 },
 
+class Vertex:
+    def __init__(self, x, y, colour):
+        self.x = x
+        self.y = y
+        self.colour = colour
+
+
 class Mesh:
     def __init__(self, stepX, stepY, stepZ, meshGrid, centreGrid):
         self.stepX = stepX
@@ -77,14 +84,14 @@ class Mesh:
             vertex3 = vertex2 - torch.tensor([0.0, 0.0, self.stepZ])
 
         if (self.stepY == 0):
-            vertex1 = vertex + torch.tensor([self.stepX, 0.0, 0.0])
-            vertex2 = vertex1 + torch.tensor([0.0, 0.0, self.stepZ])
-            vertex3 = vertex2 - torch.tensor([self.stepX, 0.0, 0.0])
+            vertex1 = vertex + torch.tensor([0.0, 0.0, self.stepZ])
+            vertex2 = vertex1 + torch.tensor([self.stepX, 0.0, 0.0])
+            vertex3 = vertex2 - torch.tensor([0.0, 0.0, self.stepZ])
 
         if (self.stepZ == 0):
-            vertex1 = vertex + torch.tensor([self.stepX, 0.0, 0.0 ])
-            vertex2 = vertex1 + torch.tensor([0.0, self.stepY, 0.0])
-            vertex3 = vertex2 - torch.tensor([self.stepX, 0.0, 0.0])
+            vertex1 = vertex + torch.tensor([0.0, self.stepY, 0.0])
+            vertex2 = vertex1 + torch.tensor([self.stepX, 0.0, 0.0])
+            vertex3 = vertex2 - torch.tensor([0.0, self.stepY, 0.0])
 
         return vertex1, vertex2, vertex3
 
@@ -166,82 +173,76 @@ def calculateFFGrid(meshList):
 
     return ffGrid
 
-def drawLine(vertex0X, vertex0Y, vertex1X, vertex1Y, colourStart, colourEnd, screen):
-     xDiff = vertex1X - vertex0X
-     yDiff = vertex1Y - vertex0Y
+def drawLine(vertex0, vertex1, screen):
+     xDiff = vertex1.x - vertex0.x
+     yDiff = vertex1.y - vertex0.y
      numSteps = max(abs(xDiff), abs(yDiff))
 
      if (numSteps == 0):
-         screen[round(vertex0Y)][round(vertex0X)] = colourStart
+         screen[round(vertex0.y)][round(vertex0.x)] = vertex0.colour
      else:
          xStep = xDiff/numSteps
          yStep = yDiff/numSteps
 
-         colourDiff = colourEnd - colourStart
+         colourDiff = vertex1.colour - vertex0.colour
          colourStep = colourDiff/numSteps
 
          for step in range(0, numSteps+1):
-             screen[round(vertex0Y + yStep*step)][round(vertex0X + xStep*step)] = colourStart + step*colourStep
+             screen[round(vertex0.y + yStep*step)][round(vertex0.x + xStep*step)] = vertex0.colour + step*colourStep
 
 
-def calculateLine(vertex0X, vertex0Y, vertex1X, vertex1Y):
-    xDiff = vertex1X - vertex0X
-    yDiff = vertex1Y - vertex0Y
+def calculateLine(vertex0, vertex1):
+    xDiff = vertex1.x - vertex0.x
+    yDiff = vertex1.y - vertex0.y
+    colourDiff = vertex1.colour - vertex0.colour
     numSteps = max(abs(xDiff), abs(yDiff))
 
     xStep = xDiff/numSteps
     yStep = yDiff/numSteps
+    colourStep = colourDiff/numSteps
 
     lineList = []
     for step in range(0, numSteps+1):
-        lineList.append((round(vertex0X + xStep*step), round(vertex0Y + yStep*step)))
+        newVertex = Vertex(round(vertex0.x + xStep*step), round(vertex0.y + yStep*step), vertex0.colour + colourStep*step)
+        lineList.append(newVertex)
 
     return lineList
 
-def fillPatch(line0, line1, line2, line3, colour0, colour1, colour2, colour3, screen):
-    maxY = int(max(line0[0][1], line1[0][1], line2[0][1], line3[0][1]))
-    minY = int(min(line0[0][1], line1[0][1], line2[0][1], line3[0][1]))
+def fillPatch(line0, line1, line2, line3, screen):
+    maxY = int(max(line0[0].y, line1[0].y, line2[0].y, line3[0].y))
+    minY = int(min(line0[0].y, line1[0].y, line2[0].y, line3[0].y))
     yDiff = (maxY - minY)+1
 
-    maxXs = [-math.inf]*yDiff
-    minXs = [math.inf]*yDiff
+    maxXs = [Vertex(-math.inf, 0, torch.tensor([0.0, 0.0, 0.0]))]*yDiff
+    minXs = [Vertex(math.inf, 0, torch.tensor([0.0, 0.0, 0.0]))]*yDiff
 
     for pixel in line0:
-        if (pixel[0] < minXs[pixel[1]-minY]):
-            minXs[pixel[1]-minY] = pixel[0]
-        if (pixel[0] > maxXs[pixel[1]-minY]):
-            maxXs[pixel[1]-minY] = pixel[0]
+        if (pixel.x < minXs[pixel.y-minY].x):
+            minXs[pixel.y-minY] = pixel
+        if (pixel.x > maxXs[pixel.y-minY].x):
+            maxXs[pixel.y-minY] = pixel
 
     for pixel in line1:
-        if (pixel[0] < minXs[pixel[1]-minY]):
-            minXs[pixel[1]-minY] = pixel[0]
-        if (pixel[0] > maxXs[pixel[1]-minY]):
-            maxXs[pixel[1]-minY] = pixel[0]
+        if (pixel.x < minXs[pixel.y-minY].x):
+            minXs[pixel.y-minY] = pixel
+        if (pixel.x > maxXs[pixel.y-minY].x):
+            maxXs[pixel.y-minY] = pixel
 
     for pixel in line2:
-        if (pixel[0] < minXs[pixel[1]-minY]):
-            minXs[pixel[1]-minY] = pixel[0]
-        if (pixel[0] > maxXs[pixel[1]-minY]):
-            maxXs[pixel[1]-minY] = pixel[0]
+        if (pixel.x < minXs[pixel.y-minY].x):
+            minXs[pixel.y-minY] = pixel
+        if (pixel.x > maxXs[pixel.y-minY].x):
+            maxXs[pixel.y-minY] = pixel
 
     for pixel in line3:
-        if (pixel[0] < minXs[pixel[1]-minY]):
-            minXs[pixel[1]-minY] = pixel[0]
-        if (pixel[0] > maxXs[pixel[1]-minY]):
-            maxXs[pixel[1]-minY] = pixel[0]
-
-    colourYDiffLeft = colour0 - colour1
-    colourYDiffRight = colour2 - colour3
-
-    colourYLeftStep = colourYDiffLeft/(yDiff-1)
-    colourYRightStep = colourYDiffRight/(yDiff-1)
-
+        if (pixel.x < minXs[pixel.y-minY].x):
+            minXs[pixel.y-minY] = pixel
+        if (pixel.x > maxXs[pixel.y-minY].x):
+            maxXs[pixel.y-minY] = pixel
 
     for index in range(0, yDiff):
-        colourStart = colour3 + index*colourYRightStep
-        colourEnd   = colour1 + index*colourYLeftStep
+        drawLine(minXs[index], maxXs[index], screen)
 
-        drawLine(minXs[index], minY+index, maxXs[index], minY+index, colourStart, colourEnd, screen)
 
 def projectVertex(vertex, focalLength, width, height):
     projectedVertex = vertex*focalLength/vertex[2] + torch.tensor([width/2, height/2, 0.0])
@@ -263,25 +264,15 @@ def projectToScreen(meshList, colours, width, height):
 
     for meshIndex, mesh in enumerate(meshList):
         for vertIndex, vertex in enumerate(mesh.meshGrid):
-            vertex0 = vertex - cameraPos
-            vertex1, vertex2, vertex3 = mesh.calculatePatchVertices(vertex0)
-
-            projectedVertex0X, projectedVertex0Y = projectVertex(vertex0, focalLength, width, height)
-            projectedVertex1X, projectedVertex1Y = projectVertex(vertex1, focalLength, width, height)
-            projectedVertex2X, projectedVertex2Y = projectVertex(vertex2, focalLength, width, height)
-            projectedVertex3X, projectedVertex3Y = projectVertex(vertex3, focalLength, width, height)
-
-            line0 = calculateLine(projectedVertex0X, projectedVertex0Y, projectedVertex1X, projectedVertex1Y)
-            line1 = calculateLine(projectedVertex1X, projectedVertex1Y, projectedVertex2X, projectedVertex2Y)
-            line2 = calculateLine(projectedVertex2X, projectedVertex2Y, projectedVertex3X, projectedVertex3Y)
-            line3 = calculateLine(projectedVertex3X, projectedVertex3Y, projectedVertex0X, projectedVertex0Y)
+            vertex0Pos = vertex - cameraPos
+            vertex1Pos, vertex2Pos, vertex3Pos = mesh.calculatePatchVertices(vertex0Pos)
 
             if (((vertIndex+1)%11 != 0) and vertIndex < 109):
 
                 light0 = colours[121*meshIndex + vertIndex].item()
                 light1 = colours[121*meshIndex + vertIndex + 1].item()
-                light2 = colours[121*meshIndex + vertIndex + 11].item()
-                light3 = colours[121*meshIndex + vertIndex + 12].item()
+                light2 = colours[121*meshIndex + vertIndex + 12].item()
+                light3 = colours[121*meshIndex + vertIndex + 11].item()
 
                 colour0 = torch.tensor([255.0, 255.0, 255.0])*light0
                 colour0 = torch.clamp(colour0, min=0.0, max=255.0)
@@ -295,21 +286,46 @@ def projectToScreen(meshList, colours, width, height):
                 colour3 = torch.tensor([255.0, 255.0, 255.0])*light3
                 colour3 = torch.clamp(colour3, min=0.0, max=255.0)
 
-                #TODO: Fix colour indexing when forming cartesian product
-                if ((meshIndex == 0) or (meshIndex == 2)):
-                    fillPatch(line0, line1, line2, line3, colour0, colour1, colour2, colour3, screen)
+                #colour0 = torch.tensor([255.0, 0.0, 0.0])
+                #colour1 = torch.tensor([0.0, 0.0, 0.0])
+                #colour2 = torch.tensor([0.0, 0.0, 255.0])
+                #colour3 = torch.tensor([255.0, 255.0, 255.0])
 
-                if (meshIndex == 1):
-                    fillPatch(line0, line1, line2, line3, colour1, colour0, colour3, colour2, screen)
+                projectedVertex0X, projectedVertex0Y = projectVertex(vertex0Pos, focalLength, width, height)
+                projectedVertex1X, projectedVertex1Y = projectVertex(vertex1Pos, focalLength, width, height)
+                projectedVertex2X, projectedVertex2Y = projectVertex(vertex2Pos, focalLength, width, height)
+                projectedVertex3X, projectedVertex3Y = projectVertex(vertex3Pos, focalLength, width, height)
 
-                if (meshIndex == 3):
-                    fillPatch(line0, line1, line2, line3, colour0, colour2, colour1, colour3, screen)
+                vertex0 = Vertex(projectedVertex0X, projectedVertex0Y, colour0)
+                vertex1 = Vertex(projectedVertex1X, projectedVertex1Y, colour1)
+                vertex2 = Vertex(projectedVertex2X, projectedVertex2Y, colour2)
+                vertex3 = Vertex(projectedVertex3X, projectedVertex3Y, colour3)
 
-                if (meshIndex == 4):
-                    fillPatch(line0, line1, line2, line3, colour1, colour3, colour0, colour2, screen)
-                #screen[projectedVertex1Y][projectedVertex1X] = torch.tensor([255.0, 255.0, 255.0])
-                #screen[projectedVertex2Y][projectedVertex2X] = torch.tensor([255.0, 0.0, 0.0])
-                #screen[projectedVertex3Y][projectedVertex3X] = torch.tensor([0.0, 0.0, 255.0])
+                #if (meshIndex == 1):
+                #    vertex0.colour = colour1
+                #    vertex1.colour = colour0
+                #    vertex2.colour = colour3
+                #    vertex3.colour = colour2
+
+                #if (meshIndex == 3):
+                #    vertex0.colour = colour0
+                #    vertex1.colour = colour2
+                #    vertex2.colour = colour1
+                #    vertex3.colour = colour3
+
+                #if (meshIndex == 4):
+                #    vertex0.colour = colour1
+                #    vertex1.colour = colour3
+                #    vertex2.colour = colour0
+                #    vertex3.colour = colour2
+
+
+                line0 = calculateLine(vertex0, vertex1)
+                line1 = calculateLine(vertex1, vertex2)
+                line2 = calculateLine(vertex2, vertex3)
+                line3 = calculateLine(vertex3, vertex0)
+
+                fillPatch(line0, line1, line2, line3, screen)
 
     return screen
 
