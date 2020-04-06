@@ -133,10 +133,14 @@ def createBasicMesh(minX, maxX, minY, maxY, minZ, maxZ, numDivides):
 
 
 def calculateFFGridPair(mesh1, mesh2):
-    ffGrid = torch.zeros(121, 121) #TODO: calculate from input mesh
+    mesh1Size = mesh1.meshGrid.size()[0]
+    mesh2Size = mesh2.meshGrid.size()[0]
+    ffGrid = torch.zeros(mesh1Size, mesh2Size)
 
     for index1, vertex1 in enumerate(mesh1.meshGrid):
         for index2, vertex2 in enumerate(mesh2.meshGrid):
+            print("index1: " + str(index1))
+            print("index2: " + str(index2))
             diff = vertex1 - vertex2
             diffLength = math.sqrt(diff[0]*diff[0] + diff[1]*diff[1] + diff[2]*diff[2])
             if (diffLength == 0.0):
@@ -157,19 +161,20 @@ def calculateFFGridPair(mesh1, mesh2):
 
     return ffGrid
 
-def calculateFFGrid(meshList):
-    ffGridPair = torch.zeros(121, 121) #TODO: calculate from input mesh
-    ffGrid = torch.zeros(605, 605) #TODO: calculate from input mesh
+def calculateFFGrid(meshList, numPatches):
+    ffGrid = torch.zeros(numPatches, numPatches)
     for index1, mesh1 in enumerate(meshList):
         for index2, mesh2 in enumerate(meshList):
+            mesh1Size = mesh1.meshGrid.size()[0]
+            mesh2Size = mesh2.meshGrid.size()[0]
             if (index1 == index2):
-                ffGridPair = torch.zeros(121, 121) #TODO: calculate from input mesh
+                ffGridPair = torch.zeros(mesh1Size, mesh2Size)
             else:
                 ffGridPair = calculateFFGridPair(mesh1, mesh2)
 
-            for i in range(0, 121):
-                for j in range(0, 121):
-                    ffGrid[121*index1+i][121*index2+j] = ffGridPair[i][j]
+            for i in range(0, mesh1Size):
+                for j in range(0, mesh2Size):
+                    ffGrid[mesh1Size*index1+i][mesh2Size*index2+j] = ffGridPair[i][j]
 
     return ffGrid
 
@@ -262,17 +267,21 @@ def projectToScreen(meshList, colours, width, height):
 
     screen = torch.zeros(height, width, 3)
 
+
     for meshIndex, mesh in enumerate(meshList):
         for vertIndex, vertex in enumerate(mesh.meshGrid):
+            meshSize = int(mesh.meshGrid.size()[0])
+            meshWidth = int(math.sqrt(meshSize)) #only works if width and height divided equally
             vertex0Pos = vertex - cameraPos
             vertex1Pos, vertex2Pos, vertex3Pos = mesh.calculatePatchVertices(vertex0Pos)
 
-            if (((vertIndex+1)%11 != 0) and vertIndex < 109):
+            #if (((vertIndex+1)%11 != 0) and vertIndex < 109):
+            if (((vertIndex+1)%meshWidth != 0) and vertIndex < (meshSize-meshWidth)):
 
-                light0 = colours[121*meshIndex + vertIndex].item()
-                light1 = colours[121*meshIndex + vertIndex + 1].item()
-                light2 = colours[121*meshIndex + vertIndex + 12].item()
-                light3 = colours[121*meshIndex + vertIndex + 11].item()
+                light0 = colours[meshSize*meshIndex + vertIndex].item()
+                light1 = colours[meshSize*meshIndex + vertIndex + 1].item()
+                light2 = colours[meshSize*meshIndex + vertIndex + meshWidth + 1].item()
+                light3 = colours[meshSize*meshIndex + vertIndex + meshWidth].item()
 
                 colour0 = torch.tensor([255.0, 255.0, 255.0])*light0
                 colour0 = torch.clamp(colour0, min=0.0, max=255.0)
@@ -286,11 +295,6 @@ def projectToScreen(meshList, colours, width, height):
                 colour3 = torch.tensor([255.0, 255.0, 255.0])*light3
                 colour3 = torch.clamp(colour3, min=0.0, max=255.0)
 
-                #colour0 = torch.tensor([255.0, 0.0, 0.0])
-                #colour1 = torch.tensor([0.0, 0.0, 0.0])
-                #colour2 = torch.tensor([0.0, 0.0, 255.0])
-                #colour3 = torch.tensor([255.0, 255.0, 255.0])
-
                 projectedVertex0X, projectedVertex0Y = projectVertex(vertex0Pos, focalLength, width, height)
                 projectedVertex1X, projectedVertex1Y = projectVertex(vertex1Pos, focalLength, width, height)
                 projectedVertex2X, projectedVertex2Y = projectVertex(vertex2Pos, focalLength, width, height)
@@ -300,25 +304,6 @@ def projectToScreen(meshList, colours, width, height):
                 vertex1 = Vertex(projectedVertex1X, projectedVertex1Y, colour1)
                 vertex2 = Vertex(projectedVertex2X, projectedVertex2Y, colour2)
                 vertex3 = Vertex(projectedVertex3X, projectedVertex3Y, colour3)
-
-                #if (meshIndex == 1):
-                #    vertex0.colour = colour1
-                #    vertex1.colour = colour0
-                #    vertex2.colour = colour3
-                #    vertex3.colour = colour2
-
-                #if (meshIndex == 3):
-                #    vertex0.colour = colour0
-                #    vertex1.colour = colour2
-                #    vertex2.colour = colour1
-                #    vertex3.colour = colour3
-
-                #if (meshIndex == 4):
-                #    vertex0.colour = colour1
-                #    vertex1.colour = colour3
-                #    vertex2.colour = colour0
-                #    vertex3.colour = colour2
-
 
                 line0 = calculateLine(vertex0, vertex1)
                 line1 = calculateLine(vertex1, vertex2)
@@ -355,13 +340,24 @@ class FFNet(nn.Module):
         super(FFNet, self).__init__()
         self.fc = nn.Linear(numPatches, numPatches)
         self.fc.weight = torch.nn.Parameter(ffGrid)
+        wallSize = int(numPatches/5)
+        wallWidth = int(math.sqrt(wallSize))
+        lightCorner = int(math.floor(wallSize + wallSize/2 - wallWidth))
         bias = torch.zeros_like(self.fc.bias)
-        bias[171] = 15.0
-        bias[172] = 15.0
-        bias[182] = 15.0
-        bias[183] = 15.0
-        bias[193] = 15.0
-        bias[194] = 15.0
+        #bias[171] = 15.0
+        #bias[172] = 15.0
+        #bias[182] = 15.0
+        #bias[183] = 15.0
+        #bias[193] = 15.0
+        #bias[194] = 15.0
+        #print(lightCorner)
+        #print(wallWidth)
+        bias[lightCorner] = 60.0
+        bias[lightCorner+1] = 60.0
+        bias[lightCorner+wallWidth] = 60.0
+        bias[lightCorner+wallWidth+1] = 60.0
+        bias[lightCorner+2*wallWidth] = 60.0
+        bias[lightCorner+2*wallWidth+1] = 60.0
         self.fc.bias = torch.nn.Parameter(bias)
 
 
@@ -372,38 +368,38 @@ class FFNet(nn.Module):
         return x
 
 
-
-numPatches = 605
+numDivides = 20
+numPatches = 5*(numDivides+1)*(numDivides+1)
 numBounces = 3
 pickleSave = False #TODO: make command line arg
-# Create random Tensor to hold input
+# Create Tensor to hold input
 x = torch.zeros(1, numPatches)
 #print(x)
 #print(torch.sum(x))
 
-floorMesh     = createBasicMesh(0.0, 556.0, 0.0, 0.0, 0.0, 559.2, 10)
-ceilingMesh   = createBasicMesh(0.0, 556.0, 548.8, 548.8, 0.0, 559.2, 10)
-backWallMesh  = createBasicMesh(0.0, 556.0, 0.0, 548.8, 559.2, 559.2, 10)
-rightWallMesh = createBasicMesh(0.0, 0.0, 0.0, 548.8, 0.0, 559.2, 10)
-leftWallMesh  = createBasicMesh(556.0, 556.0, 0.0, 548.8, 0.0, 559.2, 10)
+floorMesh     = createBasicMesh(0.0, 556.0, 0.0, 0.0, 0.0, 559.2, numDivides)
+ceilingMesh   = createBasicMesh(0.0, 556.0, 548.8, 548.8, 0.0, 559.2, numDivides)
+backWallMesh  = createBasicMesh(0.0, 556.0, 0.0, 548.8, 559.2, 559.2, numDivides)
+rightWallMesh = createBasicMesh(0.0, 0.0, 0.0, 548.8, 0.0, 559.2, numDivides)
+leftWallMesh  = createBasicMesh(556.0, 556.0, 0.0, 548.8, 0.0, 559.2, numDivides)
 
 meshList = [floorMesh, ceilingMesh, backWallMesh, rightWallMesh, leftWallMesh]
 
 if (pickleSave):
 
     #print(time.perf_counter())
-    ffGrid = calculateFFGrid(meshList) #TODO: Pickle this and load in values
+    ffGrid = calculateFFGrid(meshList, numPatches)
     #print(time.perf_counter())
     #print(ffGrid)
     #print(torch.max(ffGrid))
 
-    pickle_out = open("ffGridVertex.pickle","wb")
+    pickle_out = open("ffGridVertex20.pickle","wb")
     pickle.dump(ffGrid, pickle_out)
     pickle_out.close()
 
 else:
 
-    pickle_in = open("ffGridVertex.pickle","rb")
+    pickle_in = open("ffGridVertex20.pickle","rb")
     ffGrid = pickle.load(pickle_in)
     pickle_in.close()
 
