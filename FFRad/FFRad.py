@@ -358,10 +358,10 @@ class FFNet(nn.Module):
         bias = torch.zeros_like(self.fc.bias)
         bias[171] = 15.0
         bias[172] = 15.0
+        bias[182] = 15.0
         bias[183] = 15.0
-        bias[184] = 15.0
-        bias[195] = 15.0
-        bias[196] = 15.0
+        bias[193] = 15.0
+        bias[194] = 15.0
         self.fc.bias = torch.nn.Parameter(bias)
 
 
