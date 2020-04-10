@@ -35,6 +35,33 @@ import pickle
 #{  556.0,  548.8,  559.2,  0.0 },
 #{  556.0,  548.8,    0.0,  0.0 },
 
+#Short block -- white lambert
+#{  130.0,  165.0,   65.0 },
+#{   82.0,  165.0,  225.0 },
+#{  242.0,  165.0,  274.0 },
+#{  290.0,  165.0,  114.0 },
+
+#{  290.0,    0.0,  114.0 },
+#{  290.0,  165.0,  114.0 },
+#{  240.0,  165.0,  272.0 },
+#{  240.0,    0.0,  272.0 },
+
+#{  130.0,    0.0,   65.0 },
+#{  130.0,  165.0,   65.0 },
+#{  290.0,  165.0,  114.0 },
+#{  290.0,    0.0,  114.0 },
+
+#{   82.0,    0.0,  225.0 },
+#{   82.0,  165.0,  225.0 },
+#{  130.0,  165.0,   65.0 },
+#{  130.0,    0.0,   65.0 },
+
+#{  240.0,    0.0,  272.0 },
+#{  240.0,  165.0,  272.0 },
+#{   82.0,  165.0,  225.0 },
+#{   82.0,    0.0,  225.0 },
+
+
 class Vertex:
     def __init__(self, x, y, colour):
         self.x = x
@@ -43,33 +70,22 @@ class Vertex:
 
 
 class Mesh:
-    def __init__(self, stepX, stepY, stepZ, meshGrid, centreGrid):
-        self.stepX = stepX
-        self.stepY = stepY
-        self.stepZ = stepZ
+    def __init__(self, vec1, vec2, meshGrid, centreGrid):
+        self.vec1 = vec1
+        self.vec2 = vec2
         self.meshGrid = meshGrid
         self.centreGrid = centreGrid
 
     def area(self):
-        dimX = self.stepX
-        dimY = self.stepY
-        dimZ = self.stepZ
+        vec1Size = math.sqrt(self.vec1[0]*self.vec1[0] + self.vec1[1]*self.vec1[1] + self.vec1[2]*self.vec1[2])
+        vec2Size = math.sqrt(self.vec2[0]*self.vec2[0] + self.vec2[1]*self.vec2[1] + self.vec2[2]*self.vec2[2])
 
-        if (dimX == 0.0):
-            dimX = 1.0
-        if (dimY == 0.0):
-            dimY = 1.0
-        if (dimZ == 0.0):
-            dimZ = 1.0
-
-        return dimX*dimY*dimZ
+        return vec1Size*vec2Size
 
     def norm(self, vertex):
-        norm = torch.tensor([0.0, 0.0, 0.0])
-        if (self.stepX == 0.0): norm = torch.tensor([1.0, 0.0, 0.0])
-        if (self.stepY == 0.0): norm = torch.tensor([0.0, 1.0, 0.0])
-        if (self.stepZ == 0.0): norm = torch.tensor([0.0, 0.0, 1.0])
-
+        norm = torch.cross(self.vec1, self.vec2, dim=0)
+        norm = torch.renorm(torch.unsqueeze(norm,0), p=2, dim=0, maxnorm=1)
+        norm = torch.squeeze(norm)
         centre = torch.tensor([278.0, 274.4, 279.6]) - vertex
         centreDot = norm[0]*centre[0] + norm[1]*centre[1] + norm[2]*centre[2]
         if (centreDot < 0):
@@ -78,56 +94,27 @@ class Mesh:
         return norm
 
     def calculatePatchVertices(self, vertex):
-        if (self.stepX == 0):
-            vertex1 = vertex + torch.tensor([0.0, 0.0, self.stepZ])
-            vertex2 = vertex1 + torch.tensor([0.0, self.stepY, 0.0])
-            vertex3 = vertex2 - torch.tensor([0.0, 0.0, self.stepZ])
-
-        if (self.stepY == 0):
-            vertex1 = vertex + torch.tensor([0.0, 0.0, self.stepZ])
-            vertex2 = vertex1 + torch.tensor([self.stepX, 0.0, 0.0])
-            vertex3 = vertex2 - torch.tensor([0.0, 0.0, self.stepZ])
-
-        if (self.stepZ == 0):
-            vertex1 = vertex + torch.tensor([0.0, self.stepY, 0.0])
-            vertex2 = vertex1 + torch.tensor([self.stepX, 0.0, 0.0])
-            vertex3 = vertex2 - torch.tensor([0.0, self.stepY, 0.0])
+        vertex1 = vertex + self.vec2
+        vertex2 = vertex1 + self.vec1
+        vertex3 = vertex2 - self.vec2
 
         return vertex1, vertex2, vertex3
 
 
-def createBasicMesh(minX, maxX, minY, maxY, minZ, maxZ, numDivides):
-    ignoreX = (minX == maxX)
-    ignoreY = (minY == maxY)
-    ignoreZ = (minZ == maxZ)
+def createBasicMesh(corner, fullVec1, fullVec2, numDivides):
+    vec1 = fullVec1/numDivides
+    vec2 = fullVec2/numDivides
 
-    dimX = torch.tensor([minX])
-    dimY = torch.tensor([minY])
-    dimZ = torch.tensor([minZ])
+    meshGrid = torch.zeros((numDivides+1)*(numDivides+1), 3)
+    for i in range(0, numDivides+1):
+        for j in range(0, numDivides+1):
+            meshGrid[i*(numDivides+1) + j] = corner + i*vec1 + j*vec2
 
-    stepX = 0.0
-    stepY = 0.0
-    stepZ = 0.0
 
-    if (not ignoreX):
-        stepX = (maxX-minX)/numDivides
-        dimX = torch.arange(minX, maxX+1.0, stepX)
-
-    if (not ignoreY):
-        stepY = (maxY-minY)/numDivides
-        dimY = torch.arange(minY, maxY+1.0, stepY)
-
-    if (not ignoreZ):
-        stepZ = (maxZ-minZ)/numDivides
-        dimZ = torch.arange(minZ, maxZ+1.0, stepZ)
-
-    meshGrid = torch.cartesian_prod(dimX, dimY, dimZ)
-    #print(meshGrid.size())
-
-    centreGrid = torch.add(meshGrid, torch.tensor([stepX/2.0, stepY/2.0, stepZ/2.0]))
+    centreGrid = torch.add(meshGrid, vec1/2.0 + vec2/2.0)
     #print(centreGrid.size())
 
-    mesh = Mesh(stepX, stepY, stepZ, meshGrid, centreGrid)
+    mesh = Mesh(vec1, vec2, meshGrid, centreGrid)
 
     return mesh
 
@@ -139,8 +126,6 @@ def calculateFFGridPair(mesh1, mesh2):
 
     for index1, vertex1 in enumerate(mesh1.meshGrid):
         for index2, vertex2 in enumerate(mesh2.meshGrid):
-            print("index1: " + str(index1))
-            print("index2: " + str(index2))
             diff = vertex1 - vertex2
             diffLength = math.sqrt(diff[0]*diff[0] + diff[1]*diff[1] + diff[2]*diff[2])
             if (diffLength == 0.0):
@@ -344,20 +329,14 @@ class FFNet(nn.Module):
         wallWidth = int(math.sqrt(wallSize))
         lightCorner = int(math.floor(wallSize + wallSize/2 - wallWidth))
         bias = torch.zeros_like(self.fc.bias)
-        #bias[171] = 15.0
-        #bias[172] = 15.0
-        #bias[182] = 15.0
-        #bias[183] = 15.0
-        #bias[193] = 15.0
-        #bias[194] = 15.0
         #print(lightCorner)
         #print(wallWidth)
-        bias[lightCorner] = 60.0
-        bias[lightCorner+1] = 60.0
-        bias[lightCorner+wallWidth] = 60.0
-        bias[lightCorner+wallWidth+1] = 60.0
-        bias[lightCorner+2*wallWidth] = 60.0
-        bias[lightCorner+2*wallWidth+1] = 60.0
+        bias[lightCorner-1] = 15.0
+        bias[lightCorner] = 15.0
+        bias[lightCorner+1] = 15.0
+        bias[lightCorner+wallWidth-1] = 15.0
+        bias[lightCorner+wallWidth] = 15.0
+        bias[lightCorner+wallWidth+1] = 15.0
         self.fc.bias = torch.nn.Parameter(bias)
 
 
@@ -368,7 +347,7 @@ class FFNet(nn.Module):
         return x
 
 
-numDivides = 20
+numDivides = 10
 numPatches = 5*(numDivides+1)*(numDivides+1)
 numBounces = 3
 pickleSave = False #TODO: make command line arg
@@ -377,11 +356,11 @@ x = torch.zeros(1, numPatches)
 #print(x)
 #print(torch.sum(x))
 
-floorMesh     = createBasicMesh(0.0, 556.0, 0.0, 0.0, 0.0, 559.2, numDivides)
-ceilingMesh   = createBasicMesh(0.0, 556.0, 548.8, 548.8, 0.0, 559.2, numDivides)
-backWallMesh  = createBasicMesh(0.0, 556.0, 0.0, 548.8, 559.2, 559.2, numDivides)
-rightWallMesh = createBasicMesh(0.0, 0.0, 0.0, 548.8, 0.0, 559.2, numDivides)
-leftWallMesh  = createBasicMesh(556.0, 556.0, 0.0, 548.8, 0.0, 559.2, numDivides)
+floorMesh     = createBasicMesh(torch.tensor([556.0, 0.0, 559.2]), torch.tensor([0.0, 0.0, -559.2]), torch.tensor([-556.0, 0.0, 0.0]), numDivides)
+ceilingMesh   = createBasicMesh(torch.tensor([556.0, 548.8, 559.2]), torch.tensor([0.0, 0.0, -559.2]), torch.tensor([-556.0, 0.0, 0.0]), numDivides)
+backWallMesh  = createBasicMesh(torch.tensor([556.0, 548.8, 559.2]), torch.tensor([0.0, -548.8, 0.0]), torch.tensor([-556.0, 0.0, 0.0]), numDivides)
+rightWallMesh = createBasicMesh(torch.tensor([0.0, 548.8, 559.2]), torch.tensor([0.0, -548.8, 0.0]), torch.tensor([0.0, 0.0, -559.2]), numDivides)
+leftWallMesh  = createBasicMesh(torch.tensor([556.0, 548.8, 0.0]), torch.tensor([0.0, -548.8, 0.0]), torch.tensor([0.0, 0.0, 559.2]), numDivides)
 
 meshList = [floorMesh, ceilingMesh, backWallMesh, rightWallMesh, leftWallMesh]
 
@@ -393,13 +372,13 @@ if (pickleSave):
     #print(ffGrid)
     #print(torch.max(ffGrid))
 
-    pickle_out = open("ffGridVertex20.pickle","wb")
+    pickle_out = open("ffGridVertex10Boxes.pickle","wb")
     pickle.dump(ffGrid, pickle_out)
     pickle_out.close()
 
 else:
 
-    pickle_in = open("ffGridVertex20.pickle","rb")
+    pickle_in = open("ffGridVertex10Boxes.pickle","rb")
     ffGrid = pickle.load(pickle_in)
     pickle_in.close()
 
