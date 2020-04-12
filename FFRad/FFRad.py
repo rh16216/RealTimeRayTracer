@@ -36,12 +36,12 @@ import pickle
 #{  556.0,  548.8,    0.0,  0.0 },
 
 #Short block -- white lambert
-#{  130.0,  165.0,   65.0 },
+#{  130.0,  165.0,   65.0 }, top
 #{   82.0,  165.0,  225.0 },
 #{  242.0,  165.0,  274.0 },
 #{  290.0,  165.0,  114.0 },
 
-#{  290.0,    0.0,  114.0 },
+#{  290.0,    0.0,  114.0 }, left side
 #{  290.0,  165.0,  114.0 },
 #{  240.0,  165.0,  272.0 },
 #{  240.0,    0.0,  272.0 },
@@ -49,17 +49,43 @@ import pickle
 #{  130.0,    0.0,   65.0 },
 #{  130.0,  165.0,   65.0 },
 #{  290.0,  165.0,  114.0 },
-#{  290.0,    0.0,  114.0 },
+#{  290.0,    0.0,  114.0 }, front
 
-#{   82.0,    0.0,  225.0 },
+#{   82.0,    0.0,  225.0 }, right side
 #{   82.0,  165.0,  225.0 },
 #{  130.0,  165.0,   65.0 },
 #{  130.0,    0.0,   65.0 },
 
-#{  240.0,    0.0,  272.0 },
+#{  240.0,    0.0,  272.0 }, back
 #{  240.0,  165.0,  272.0 },
 #{   82.0,  165.0,  225.0 },
 #{   82.0,    0.0,  225.0 },
+
+# Tall block -- white lambert
+#{  423.0f,  330.0f,  247.0f, 0.0f }, top
+#{  265.0f,  330.0f,  296.0f, 0.0f },
+#{  314.0f,  330.0f,  455.0f, 0.0f },
+#{  472.0f,  330.0f,  406.0f, 0.0f },
+
+#{  423.0f,    0.0f,  247.0f, 0.0f },
+#{  423.0f,  330.0f,  247.0f, 0.0f },
+#{  472.0f,  330.0f,  406.0f, 0.0f }, left side
+#{  472.0f,    0.0f,  406.0f, 0.0f },
+
+#{  472.0f,    0.0f,  406.0f, 0.0f },
+#{  472.0f,  330.0f,  406.0f, 0.0f },
+#{  314.0f,  330.0f,  456.0f, 0.0f }, back
+#{  314.0f,    0.0f,  456.0f, 0.0f },
+
+#{  314.0f,    0.0f,  456.0f, 0.0f },
+#{  314.0f,  330.0f,  456.0f, 0.0f }, right side
+#{  265.0f,  330.0f,  296.0f, 0.0f },
+#{  265.0f,    0.0f,  296.0f, 0.0f },
+
+#{  265.0f,    0.0f,  296.0f, 0.0f }, front
+#{  265.0f,  330.0f,  296.0f, 0.0f },
+#{  423.0f,  330.0f,  247.0f, 0.0f },
+#{  423.0f,    0.0f,  247.0f, 0.0f },
 
 
 class Vertex:
@@ -86,7 +112,8 @@ class Mesh:
         norm = torch.cross(self.vec1, self.vec2, dim=0)
         norm = torch.renorm(torch.unsqueeze(norm,0), p=2, dim=0, maxnorm=1)
         norm = torch.squeeze(norm)
-        centre = torch.tensor([278.0, 274.4, 279.6]) - vertex
+        #centre = torch.tensor([278.0, 274.4, 279.6]) - vertex
+        centre = torch.tensor([278.0, 273.0, -600.0]) - vertex
         centreDot = norm[0]*centre[0] + norm[1]*centre[1] + norm[2]*centre[2]
         if (centreDot < 0):
             norm = -1.0*norm
@@ -187,14 +214,18 @@ def calculateLine(vertex0, vertex1):
     colourDiff = vertex1.colour - vertex0.colour
     numSteps = max(abs(xDiff), abs(yDiff))
 
-    xStep = xDiff/numSteps
-    yStep = yDiff/numSteps
-    colourStep = colourDiff/numSteps
-
     lineList = []
-    for step in range(0, numSteps+1):
-        newVertex = Vertex(round(vertex0.x + xStep*step), round(vertex0.y + yStep*step), vertex0.colour + colourStep*step)
-        lineList.append(newVertex)
+    if (numSteps == 0):
+        lineList.append(vertex0)
+
+    else:
+        xStep = xDiff/numSteps
+        yStep = yDiff/numSteps
+        colourStep = colourDiff/numSteps
+
+        for step in range(0, numSteps+1):
+            newVertex = Vertex(round(vertex0.x + xStep*step), round(vertex0.y + yStep*step), vertex0.colour + colourStep*step)
+            lineList.append(newVertex)
 
     return lineList
 
@@ -325,7 +356,7 @@ class FFNet(nn.Module):
         super(FFNet, self).__init__()
         self.fc = nn.Linear(numPatches, numPatches)
         self.fc.weight = torch.nn.Parameter(ffGrid)
-        wallSize = int(numPatches/5)
+        wallSize = int(numPatches/13)
         wallWidth = int(math.sqrt(wallSize))
         lightCorner = int(math.floor(wallSize + wallSize/2 - wallWidth))
         bias = torch.zeros_like(self.fc.bias)
@@ -348,9 +379,9 @@ class FFNet(nn.Module):
 
 
 numDivides = 10
-numPatches = 5*(numDivides+1)*(numDivides+1)
+numPatches = 13*(numDivides+1)*(numDivides+1)
 numBounces = 3
-pickleSave = False #TODO: make command line arg
+pickleSave = True #TODO: make command line arg
 # Create Tensor to hold input
 x = torch.zeros(1, numPatches)
 #print(x)
@@ -362,7 +393,19 @@ backWallMesh  = createBasicMesh(torch.tensor([556.0, 548.8, 559.2]), torch.tenso
 rightWallMesh = createBasicMesh(torch.tensor([0.0, 548.8, 559.2]), torch.tensor([0.0, -548.8, 0.0]), torch.tensor([0.0, 0.0, -559.2]), numDivides)
 leftWallMesh  = createBasicMesh(torch.tensor([556.0, 548.8, 0.0]), torch.tensor([0.0, -548.8, 0.0]), torch.tensor([0.0, 0.0, 559.2]), numDivides)
 
-meshList = [floorMesh, ceilingMesh, backWallMesh, rightWallMesh, leftWallMesh]
+shortBlockTop   = createBasicMesh(torch.tensor([242.0, 165.0, 274.0]), torch.tensor([48.0, 0.0, -160.0]), torch.tensor([-160.0, 0.0, -49.0]), numDivides)
+shortBlockLeft  = createBasicMesh(torch.tensor([240.0, 165.0, 272.0]), torch.tensor([0.0, -165.0, 0.0]), torch.tensor([50.0, 0.0, -158.0]), numDivides)
+shortBlockRight = createBasicMesh(torch.tensor([130.0, 165.0, 65.0]), torch.tensor([0.0, -165.0, 0.0]), torch.tensor([-48.0, 0.0, 160.0]), numDivides)
+shortBlockFront = createBasicMesh(torch.tensor([290.0, 165.0, 114.0]), torch.tensor([0.0, -165.0, 0.0]), torch.tensor([-160.0, 0.0, -49.0]), numDivides)
+#shortBlockBack  = createBasicMesh(torch.tensor([82.0, 165.0, 225.0]), torch.tensor([0.0, -165.0, 0.0]), torch.tensor([158.0, 0.0, 47.0]), numDivides)
+
+tallBlockTop   = createBasicMesh(torch.tensor([472.0, 330.0, 406.0]), torch.tensor([-49.0, 0.0, -159.0]), torch.tensor([-158.0, 0.0, 49.0]), numDivides)
+tallBlockLeft  = createBasicMesh(torch.tensor([472.0, 330.0, 406.0]), torch.tensor([0.0, -330.0, 0.0]), torch.tensor([-49.0, 0.0, -159.0]), numDivides)
+tallBlockRight = createBasicMesh(torch.tensor([265.0, 330.0, 296.0]), torch.tensor([0.0, -330.0, 0.0]), torch.tensor([49.0, 0.0, 160.0]), numDivides)
+tallBlockFront = createBasicMesh(torch.tensor([423.0, 330.0, 247.0]), torch.tensor([0.0, -330.0, 0.0]), torch.tensor([-158.0, 0.0, 49.0]), numDivides)
+#tallBlockBack  = createBasicMesh(torch.tensor([314.0, 330.0, 456.0]), torch.tensor([0.0, -330.0, 0.0]), torch.tensor([158.0, 0.0, -50.0]), numDivides)
+
+meshList = [floorMesh, ceilingMesh, backWallMesh, rightWallMesh, leftWallMesh, shortBlockLeft, shortBlockRight, shortBlockFront, shortBlockTop, tallBlockLeft, tallBlockRight, tallBlockFront, tallBlockTop]
 
 if (pickleSave):
 
