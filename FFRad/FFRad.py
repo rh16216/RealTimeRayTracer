@@ -101,19 +101,21 @@ class Mesh:
         self.vec2 = vec2
         self.meshGrid = meshGrid
         self.centreGrid = centreGrid
+        self.area = self.calculateArea()
+        self.norm = self.calculateNorm()
 
-    def area(self):
+    def calculateArea(self):
         vec1Size = math.sqrt(self.vec1[0]*self.vec1[0] + self.vec1[1]*self.vec1[1] + self.vec1[2]*self.vec1[2])
         vec2Size = math.sqrt(self.vec2[0]*self.vec2[0] + self.vec2[1]*self.vec2[1] + self.vec2[2]*self.vec2[2])
 
         return vec1Size*vec2Size
 
-    def norm(self, vertex):
+    def calculateNorm(self):
         norm = torch.cross(self.vec1, self.vec2, dim=0)
         norm = torch.renorm(torch.unsqueeze(norm,0), p=2, dim=0, maxnorm=1)
         norm = torch.squeeze(norm)
-        #centre = torch.tensor([278.0, 274.4, 279.6]) - vertex
-        centre = torch.tensor([278.0, 273.0, -600.0]) - vertex
+        #centre = torch.tensor([278.0, 274.4, 279.6]) - self.meshGrid[0]
+        centre = torch.tensor([278.0, 273.0, -600.0]) - self.meshGrid[0]
         centreDot = norm[0]*centre[0] + norm[1]*centre[1] + norm[2]*centre[2]
         if (centreDot < 0):
             norm = -1.0*norm
@@ -146,7 +148,60 @@ def createBasicMesh(corner, fullVec1, fullVec2, numDivides):
     return mesh
 
 
-def calculateFFGridPair(mesh1, mesh2):
+def calculateVisibility(start, rayDir, maxLength, index1, index2):
+    #create box faces lists here
+    cornerList = [torch.tensor([242.0, 165.0, 274.0]), torch.tensor([240.0, 165.0, 272.0]), torch.tensor([130.0, 165.0, 65.0]),
+                  torch.tensor([290.0, 165.0, 114.0]), torch.tensor([472.0, 330.0, 406.0]), torch.tensor([472.0, 330.0, 406.0]),
+                  torch.tensor([265.0, 330.0, 296.0]), torch.tensor([423.0, 330.0, 247.0])]
+
+    v1List     = [torch.tensor([48.0, 0.0, -160.0]), torch.tensor([0.0, -165.0, 0.0]), torch.tensor([0.0, -165.0, 0.0]),
+                  torch.tensor([0.0, -165.0, 0.0]), torch.tensor([-49.0, 0.0, -159.0]), torch.tensor([0.0, -330.0, 0.0]),
+                  torch.tensor([0.0, -330.0, 0.0]), torch.tensor([0.0, -330.0, 0.0])]
+
+    v2List     = [torch.tensor([-160.0, 0.0, -49.0]), torch.tensor([50.0, 0.0, -158.0]), torch.tensor([-48.0, 0.0, 160.0]),
+                  torch.tensor([-160.0, 0.0, -49.0]), torch.tensor([-158.0, 0.0, 49.0]), torch.tensor([-49.0, 0.0, -159.0]),
+                  torch.tensor([49.0, 0.0, 160.0]), torch.tensor([-158.0, 0.0, 49.0])]
+
+
+    #remove indices
+    smallerIndex = min(index1, index2)
+    largerIndex = max(index1, index2)
+
+    if (largerIndex > 4):
+
+        del cornerList[largerIndex - 5]
+        del v1List[largerIndex - 5]
+        del v2List[largerIndex - 5]
+
+        if (smallerIndex > 4):
+            del cornerList[smallerIndex - 5]
+            del v1List[smallerIndex - 5]
+            del v2List[smallerIndex - 5]
+
+
+    #check for intersection with blocks
+    for index in range(0, len(cornerList)):
+        A = torch.zeros(3,3)
+        for i in range(0,3):
+            A[i][0] = -1.0*rayDir[i].item()
+            A[i][1] = v1List[index][i].item()
+            A[i][2] = v2List[index][i].item()
+        B = torch.unsqueeze(start - cornerList[index], 1)
+
+        if (A.det() != 0):
+
+            coeffs = torch.squeeze(torch.mm(A.inverse(), B))
+
+            T = coeffs[0].item()
+            U = coeffs[1].item()
+            V = coeffs[2].item()
+            if ((0 < T < maxLength-10) and (0 < U < 1) and (0 < V < 1)):
+                return False
+
+    return True
+
+
+def calculateFFGridPair(mesh1, mesh2, meshIndex1, meshIndex2):
     mesh1Size = mesh1.meshGrid.size()[0]
     mesh2Size = mesh2.meshGrid.size()[0]
     ffGrid = torch.zeros(mesh1Size, mesh2Size)
@@ -161,15 +216,22 @@ def calculateFFGridPair(mesh1, mesh2):
             else:
 
                 diffDir = diff/diffLength
-                vertex1Norm = mesh1.norm(vertex1)
-                vertex2Norm = mesh2.norm(vertex2)
-                dot1 = -1.0*(vertex1Norm[0]*diffDir[0] + vertex1Norm[1]*diffDir[1] + vertex1Norm[2]*diffDir[2])
-                dot1 = max(dot1, 0.0)
-                dot2 = vertex2Norm[0]*diffDir[0] + vertex2Norm[1]*diffDir[1] + vertex2Norm[2]*diffDir[2]
-                dot2 = max(dot2, 0.0)
-                area2 = mesh2.area()
 
-                ffGrid[index1][index2] = dot1*dot2*area2/(3.14*diffLength*diffLength)
+                if calculateVisibility(vertex2, diffDir, diffLength, meshIndex1, meshIndex2):
+
+                    vertex1Norm = mesh1.norm
+                    vertex2Norm = mesh2.norm
+                    dot1 = -1.0*(vertex1Norm[0]*diffDir[0] + vertex1Norm[1]*diffDir[1] + vertex1Norm[2]*diffDir[2])
+                    dot1 = max(dot1, 0.0)
+                    dot2 = vertex2Norm[0]*diffDir[0] + vertex2Norm[1]*diffDir[1] + vertex2Norm[2]*diffDir[2]
+                    dot2 = max(dot2, 0.0)
+                    area2 = mesh2.area
+
+                    ffGrid[index1][index2] = dot1*dot2*area2/(3.14*diffLength*diffLength)
+
+                else:
+                    ffGrid[index1][index2] = 0.0
+
 
     return ffGrid
 
@@ -182,7 +244,7 @@ def calculateFFGrid(meshList, numPatches):
             if (index1 == index2):
                 ffGridPair = torch.zeros(mesh1Size, mesh2Size)
             else:
-                ffGridPair = calculateFFGridPair(mesh1, mesh2)
+                ffGridPair = calculateFFGridPair(mesh1, mesh2, index1, index2)
 
             for i in range(0, mesh1Size):
                 for j in range(0, mesh2Size):
@@ -382,62 +444,65 @@ numDivides = 10
 numPatches = 13*(numDivides+1)*(numDivides+1)
 numBounces = 3
 pickleSave = True #TODO: make command line arg
-# Create Tensor to hold input
-x = torch.zeros(1, numPatches)
-#print(x)
-#print(torch.sum(x))
 
-floorMesh     = createBasicMesh(torch.tensor([556.0, 0.0, 559.2]), torch.tensor([0.0, 0.0, -559.2]), torch.tensor([-556.0, 0.0, 0.0]), numDivides)
-ceilingMesh   = createBasicMesh(torch.tensor([556.0, 548.8, 559.2]), torch.tensor([0.0, 0.0, -559.2]), torch.tensor([-556.0, 0.0, 0.0]), numDivides)
-backWallMesh  = createBasicMesh(torch.tensor([556.0, 548.8, 559.2]), torch.tensor([0.0, -548.8, 0.0]), torch.tensor([-556.0, 0.0, 0.0]), numDivides)
-rightWallMesh = createBasicMesh(torch.tensor([0.0, 548.8, 559.2]), torch.tensor([0.0, -548.8, 0.0]), torch.tensor([0.0, 0.0, -559.2]), numDivides)
-leftWallMesh  = createBasicMesh(torch.tensor([556.0, 548.8, 0.0]), torch.tensor([0.0, -548.8, 0.0]), torch.tensor([0.0, 0.0, 559.2]), numDivides)
+with torch.no_grad():
 
-shortBlockTop   = createBasicMesh(torch.tensor([242.0, 165.0, 274.0]), torch.tensor([48.0, 0.0, -160.0]), torch.tensor([-160.0, 0.0, -49.0]), numDivides)
-shortBlockLeft  = createBasicMesh(torch.tensor([240.0, 165.0, 272.0]), torch.tensor([0.0, -165.0, 0.0]), torch.tensor([50.0, 0.0, -158.0]), numDivides)
-shortBlockRight = createBasicMesh(torch.tensor([130.0, 165.0, 65.0]), torch.tensor([0.0, -165.0, 0.0]), torch.tensor([-48.0, 0.0, 160.0]), numDivides)
-shortBlockFront = createBasicMesh(torch.tensor([290.0, 165.0, 114.0]), torch.tensor([0.0, -165.0, 0.0]), torch.tensor([-160.0, 0.0, -49.0]), numDivides)
-#shortBlockBack  = createBasicMesh(torch.tensor([82.0, 165.0, 225.0]), torch.tensor([0.0, -165.0, 0.0]), torch.tensor([158.0, 0.0, 47.0]), numDivides)
+    # Create Tensor to hold input
+    x = torch.zeros(1, numPatches)
+    #print(x)
+    #print(torch.sum(x))
 
-tallBlockTop   = createBasicMesh(torch.tensor([472.0, 330.0, 406.0]), torch.tensor([-49.0, 0.0, -159.0]), torch.tensor([-158.0, 0.0, 49.0]), numDivides)
-tallBlockLeft  = createBasicMesh(torch.tensor([472.0, 330.0, 406.0]), torch.tensor([0.0, -330.0, 0.0]), torch.tensor([-49.0, 0.0, -159.0]), numDivides)
-tallBlockRight = createBasicMesh(torch.tensor([265.0, 330.0, 296.0]), torch.tensor([0.0, -330.0, 0.0]), torch.tensor([49.0, 0.0, 160.0]), numDivides)
-tallBlockFront = createBasicMesh(torch.tensor([423.0, 330.0, 247.0]), torch.tensor([0.0, -330.0, 0.0]), torch.tensor([-158.0, 0.0, 49.0]), numDivides)
-#tallBlockBack  = createBasicMesh(torch.tensor([314.0, 330.0, 456.0]), torch.tensor([0.0, -330.0, 0.0]), torch.tensor([158.0, 0.0, -50.0]), numDivides)
+    floorMesh     = createBasicMesh(torch.tensor([556.0, 0.0, 559.2]), torch.tensor([0.0, 0.0, -559.2]), torch.tensor([-556.0, 0.0, 0.0]), numDivides)
+    ceilingMesh   = createBasicMesh(torch.tensor([556.0, 548.8, 559.2]), torch.tensor([0.0, 0.0, -559.2]), torch.tensor([-556.0, 0.0, 0.0]), numDivides)
+    backWallMesh  = createBasicMesh(torch.tensor([556.0, 548.8, 559.2]), torch.tensor([0.0, -548.8, 0.0]), torch.tensor([-556.0, 0.0, 0.0]), numDivides)
+    rightWallMesh = createBasicMesh(torch.tensor([0.0, 548.8, 559.2]), torch.tensor([0.0, -548.8, 0.0]), torch.tensor([0.0, 0.0, -559.2]), numDivides)
+    leftWallMesh  = createBasicMesh(torch.tensor([556.0, 548.8, 0.0]), torch.tensor([0.0, -548.8, 0.0]), torch.tensor([0.0, 0.0, 559.2]), numDivides)
 
-meshList = [floorMesh, ceilingMesh, backWallMesh, rightWallMesh, leftWallMesh, shortBlockLeft, shortBlockRight, shortBlockFront, shortBlockTop, tallBlockLeft, tallBlockRight, tallBlockFront, tallBlockTop]
+    shortBlockTop   = createBasicMesh(torch.tensor([242.0, 165.0, 274.0]), torch.tensor([48.0, 0.0, -160.0]), torch.tensor([-160.0, 0.0, -49.0]), numDivides)
+    shortBlockLeft  = createBasicMesh(torch.tensor([240.0, 165.0, 272.0]), torch.tensor([0.0, -165.0, 0.0]), torch.tensor([50.0, 0.0, -158.0]), numDivides)
+    shortBlockRight = createBasicMesh(torch.tensor([130.0, 165.0, 65.0]), torch.tensor([0.0, -165.0, 0.0]), torch.tensor([-48.0, 0.0, 160.0]), numDivides)
+    shortBlockFront = createBasicMesh(torch.tensor([290.0, 165.0, 114.0]), torch.tensor([0.0, -165.0, 0.0]), torch.tensor([-160.0, 0.0, -49.0]), numDivides)
+    #shortBlockBack  = createBasicMesh(torch.tensor([82.0, 165.0, 225.0]), torch.tensor([0.0, -165.0, 0.0]), torch.tensor([158.0, 0.0, 47.0]), numDivides)
 
-if (pickleSave):
+    tallBlockTop   = createBasicMesh(torch.tensor([472.0, 330.0, 406.0]), torch.tensor([-49.0, 0.0, -159.0]), torch.tensor([-158.0, 0.0, 49.0]), numDivides)
+    tallBlockLeft  = createBasicMesh(torch.tensor([472.0, 330.0, 406.0]), torch.tensor([0.0, -330.0, 0.0]), torch.tensor([-49.0, 0.0, -159.0]), numDivides)
+    tallBlockRight = createBasicMesh(torch.tensor([265.0, 330.0, 296.0]), torch.tensor([0.0, -330.0, 0.0]), torch.tensor([49.0, 0.0, 160.0]), numDivides)
+    tallBlockFront = createBasicMesh(torch.tensor([423.0, 330.0, 247.0]), torch.tensor([0.0, -330.0, 0.0]), torch.tensor([-158.0, 0.0, 49.0]), numDivides)
+    #tallBlockBack  = createBasicMesh(torch.tensor([314.0, 330.0, 456.0]), torch.tensor([0.0, -330.0, 0.0]), torch.tensor([158.0, 0.0, -50.0]), numDivides)
 
-    #print(time.perf_counter())
-    ffGrid = calculateFFGrid(meshList, numPatches)
-    #print(time.perf_counter())
-    #print(ffGrid)
-    #print(torch.max(ffGrid))
+    meshList = [floorMesh, ceilingMesh, backWallMesh, rightWallMesh, leftWallMesh, shortBlockLeft, shortBlockRight, shortBlockFront, shortBlockTop, tallBlockLeft, tallBlockRight, tallBlockFront, tallBlockTop]
 
-    pickle_out = open("ffGridVertex10Boxes.pickle","wb")
-    pickle.dump(ffGrid, pickle_out)
-    pickle_out.close()
+    if (pickleSave):
 
-else:
+        #print(time.perf_counter())
+        ffGrid = calculateFFGrid(meshList, numPatches)
+        #print(time.perf_counter())
+        #print(ffGrid)
+        #print(torch.max(ffGrid))
 
-    pickle_in = open("ffGridVertex10Boxes.pickle","rb")
-    ffGrid = pickle.load(pickle_in)
-    pickle_in.close()
+        pickle_out = open("ffGridVertex10BoxesShadows.pickle","wb")
+        pickle.dump(ffGrid, pickle_out)
+        pickle_out.close()
 
-model = FFNet(ffGrid)
+    else:
 
-start = time.perf_counter()
-rad = model(x)
-stop = time.perf_counter()
-print("runtime: " + str(stop - start))
-rad = torch.squeeze(rad)
-#print(rad)
-#print(rad.size())
+        pickle_in = open("ffGridVertex10BoxesShadows.pickle","rb")
+        ffGrid = pickle.load(pickle_in)
+        pickle_in.close()
 
-width = 512
-height = 512
+    model = FFNet(ffGrid)
 
-data = projectToScreen(meshList, rad, width, height)
+    start = time.perf_counter()
+    rad = model(x)
+    stop = time.perf_counter()
+    print("runtime: " + str(stop - start))
+    rad = torch.squeeze(rad)
+    #print(rad)
+    #print(rad.size())
 
-writePPM(data, width, height, "output.ppm")
+    width = 512
+    height = 512
+
+    data = projectToScreen(meshList, rad, width, height)
+
+    writePPM(data, width, height, "output.ppm")
