@@ -4,6 +4,7 @@ import torch.nn as nn
 import math
 import time
 import pickle
+import argparse
 
 # Floor  -- white lambert
 #{    0.0,    0.0,    0.0, 0.0 },
@@ -440,15 +441,28 @@ class FFNet(nn.Module):
         return x
 
 
-numDivides = 10
+numDivides = 2
 numPatches = 13*(numDivides+1)*(numDivides+1)
 numBounces = 3
-pickleSave = True #TODO: make command line arg
+
+parser = argparse.ArgumentParser(description='Parse command line arguments')
+
+parser.add_argument('--disable-cuda', action='store_true',
+                    help='Disable CUDA')
+parser.add_argument('--pickle-save', action='store_true',
+                    help='Calculate and Store Form Factors')
+
+args = parser.parse_args()
+args.device = None
+if not args.disable_cuda and torch.cuda.is_available():
+    args.device = torch.device('cuda')
+else:
+    args.device = torch.device('cpu')
 
 with torch.no_grad():
 
     # Create Tensor to hold input
-    x = torch.zeros(1, numPatches)
+    x = torch.zeros(1, numPatches).to(device=args.device)
     #print(x)
     #print(torch.sum(x))
 
@@ -472,7 +486,7 @@ with torch.no_grad():
 
     meshList = [floorMesh, ceilingMesh, backWallMesh, rightWallMesh, leftWallMesh, shortBlockLeft, shortBlockRight, shortBlockFront, shortBlockTop, tallBlockLeft, tallBlockRight, tallBlockFront, tallBlockTop]
 
-    if (pickleSave):
+    if (args.pickle_save):
 
         #print(time.perf_counter())
         ffGrid = calculateFFGrid(meshList, numPatches)
@@ -480,17 +494,18 @@ with torch.no_grad():
         #print(ffGrid)
         #print(torch.max(ffGrid))
 
-        pickle_out = open("ffGridVertex10BoxesShadows.pickle","wb")
+        pickle_out = open("ffGridVertex20BoxesShadowsTinyTest.pickle","wb")
         pickle.dump(ffGrid, pickle_out)
         pickle_out.close()
 
     else:
 
-        pickle_in = open("ffGridVertex10BoxesShadows.pickle","rb")
+        pickle_in = open("ffGridVertex20BoxesShadowsTinyTest.pickle","rb")
         ffGrid = pickle.load(pickle_in)
         pickle_in.close()
 
-    model = FFNet(ffGrid)
+    ffGrid = ffGrid.to(device=args.device)
+    model = FFNet(ffGrid).to(device=args.device)
 
     start = time.perf_counter()
     rad = model(x)
