@@ -243,11 +243,8 @@ def calculateFFGrid(meshList, numPatches):
 
     colourIndexList = [0, 0, 0, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0]
 
-    coloursR = torch.zeros(numPatches)
-    coloursG = torch.zeros(numPatches)
-    coloursB = torch.zeros(numPatches)
-
-    ffGrid = torch.zeros(numPatches, numPatches)
+    colours = torch.zeros(3*numPatches)
+    ffGrid = torch.zeros(3*numPatches, 3*numPatches)
     for index1, mesh1 in enumerate(meshList):
         for index2, mesh2 in enumerate(meshList):
             mesh1Size = mesh1.meshGrid.size()[0]
@@ -259,13 +256,15 @@ def calculateFFGrid(meshList, numPatches):
 
             for i in range(0, mesh1Size):
                 for j in range(0, mesh2Size):
-                    ffGrid[mesh1Size*index1+i][mesh2Size*index2+j] = ffGridPair[i][j]
+                    ffGrid[3*mesh1Size*index1+3*i][3*mesh2Size*index2+3*j] = ffGridPair[i][j]
+                    ffGrid[3*mesh1Size*index1+3*i+1][3*mesh2Size*index2+3*j+1] = ffGridPair[i][j]
+                    ffGrid[3*mesh1Size*index1+3*i+2][3*mesh2Size*index2+3*j+2] = ffGridPair[i][j]
 
-                coloursR[mesh1Size*index1+i] = colourValuesR[colourIndexList[index1]]
-                coloursG[mesh1Size*index1+i] = colourValuesG[colourIndexList[index1]]
-                coloursB[mesh1Size*index1+i] = colourValuesB[colourIndexList[index1]]
+                colours[3*mesh1Size*index1+3*i] = colourValuesR[colourIndexList[index1]]
+                colours[3*mesh1Size*index1+3*i+1] = colourValuesG[colourIndexList[index1]]
+                colours[3*mesh1Size*index1+3*i+2] = colourValuesB[colourIndexList[index1]]
 
-    return ffGrid, coloursR, coloursG, coloursB
+    return ffGrid, colours
 
 def drawLine(vertex0, vertex1, screen):
      xDiff = vertex1.x - vertex0.x
@@ -353,7 +352,7 @@ def projectVertex(vertex, focalLength, width, height):
 
 
 
-def projectToScreen(meshList, coloursR, coloursG, coloursB, width, height):
+def projectToScreen(meshList, colours, width, height):
 
     focalLength = height/2
     cameraPos = torch.tensor([278.0, 273.0, -600.0])
@@ -371,20 +370,20 @@ def projectToScreen(meshList, coloursR, coloursG, coloursB, width, height):
             #if (((vertIndex+1)%11 != 0) and vertIndex < 109):
             if (((vertIndex+1)%meshWidth != 0) and vertIndex < (meshSize-meshWidth)):
 
-                r0 = coloursR[meshSize*meshIndex + vertIndex].item()
-                r1 = coloursR[meshSize*meshIndex + vertIndex + 1].item()
-                r2 = coloursR[meshSize*meshIndex + vertIndex + meshWidth + 1].item()
-                r3 = coloursR[meshSize*meshIndex + vertIndex + meshWidth].item()
+                r0 = colours[3*meshSize*meshIndex + 3*vertIndex].item()
+                r1 = colours[3*(meshSize*meshIndex + vertIndex + 1)].item()
+                r2 = colours[3*(meshSize*meshIndex + vertIndex + meshWidth + 1)].item()
+                r3 = colours[3*(meshSize*meshIndex + vertIndex + meshWidth)].item()
 
-                g0 = coloursG[meshSize*meshIndex + vertIndex].item()
-                g1 = coloursG[meshSize*meshIndex + vertIndex + 1].item()
-                g2 = coloursG[meshSize*meshIndex + vertIndex + meshWidth + 1].item()
-                g3 = coloursG[meshSize*meshIndex + vertIndex + meshWidth].item()
+                g0 = colours[3*(meshSize*meshIndex + vertIndex)+1].item()
+                g1 = colours[3*(meshSize*meshIndex + vertIndex + 1)+1].item()
+                g2 = colours[3*(meshSize*meshIndex + vertIndex + meshWidth + 1)+1].item()
+                g3 = colours[3*(meshSize*meshIndex + vertIndex + meshWidth)+1].item()
 
-                b0 = coloursB[meshSize*meshIndex + vertIndex].item()
-                b1 = coloursB[meshSize*meshIndex + vertIndex + 1].item()
-                b2 = coloursB[meshSize*meshIndex + vertIndex + meshWidth + 1].item()
-                b3 = coloursB[meshSize*meshIndex + vertIndex + meshWidth].item()
+                b0 = colours[3*(meshSize*meshIndex + vertIndex)+2].item()
+                b1 = colours[3*(meshSize*meshIndex + vertIndex + 1)+2].item()
+                b2 = colours[3*(meshSize*meshIndex + vertIndex + meshWidth + 1)+2].item()
+                b3 = colours[3*(meshSize*meshIndex + vertIndex + meshWidth)+2].item()
 
                 colour0 = torch.tensor([r0, g0, b0])*255.0
                 colour0 = torch.clamp(colour0, min=0.0, max=255.0)
@@ -442,7 +441,7 @@ class FFNet(nn.Module):
     def __init__(self, ffGrid, colours):
         super(FFNet, self).__init__()
         self.colours = colours
-        self.fc = nn.Linear(numPatches, numPatches)
+        self.fc = nn.Linear(3*numPatches, 3*numPatches)
         self.fc.weight = torch.nn.Parameter(ffGrid)
         wallSize = int(numPatches/13)
         wallWidth = int(math.sqrt(wallSize))
@@ -450,12 +449,24 @@ class FFNet(nn.Module):
         bias = torch.zeros_like(self.fc.bias)
         #print(lightCorner)
         #print(wallWidth)
-        bias[lightCorner-1] = 60.0
-        bias[lightCorner] = 60.0
-        bias[lightCorner+1] = 60.0
-        bias[lightCorner+wallWidth-1] = 60.0
-        bias[lightCorner+wallWidth] = 60.0
-        bias[lightCorner+wallWidth+1] = 60.0
+        bias[3*(lightCorner-1)] = 15.0
+        bias[3*(lightCorner)] = 15.0
+        bias[3*(lightCorner+1)] = 15.0
+        bias[3*(lightCorner+wallWidth-1)] = 15.0
+        bias[3*(lightCorner+wallWidth)] = 15.0
+        bias[3*(lightCorner+wallWidth+1)] = 15.0
+        bias[3*(lightCorner-1)+1] = 15.0
+        bias[3*(lightCorner)+1] = 15.0
+        bias[3*(lightCorner+1)+1] = 15.0
+        bias[3*(lightCorner+wallWidth-1)+1] = 15.0
+        bias[3*(lightCorner+wallWidth)+1] = 15.0
+        bias[3*(lightCorner+wallWidth+1)+1] = 15.0
+        bias[3*(lightCorner-1)+2] = 15.0
+        bias[3*(lightCorner)+2] = 15.0
+        bias[3*(lightCorner+1)+2] = 15.0
+        bias[3*(lightCorner+wallWidth-1)+2] = 15.0
+        bias[3*(lightCorner+wallWidth)+2] = 15.0
+        bias[3*(lightCorner+wallWidth+1)+2] = 15.0
         self.fc.bias = torch.nn.Parameter(bias)
 
 
@@ -468,7 +479,7 @@ class FFNet(nn.Module):
         return x
 
 
-numDivides = 20
+numDivides = 10
 numPatches = 13*(numDivides+1)*(numDivides+1)
 numBounces = 3
 
@@ -489,7 +500,7 @@ else:
 with torch.no_grad():
 
     # Create Tensor to hold input
-    x = torch.zeros(1, numPatches).to(device=args.device)
+    x = torch.zeros(1, 3*numPatches).to(device=args.device)
     #print(x)
     #print(torch.sum(x))
 
@@ -516,41 +527,35 @@ with torch.no_grad():
     if (args.pickle_save):
 
         #print(time.perf_counter())
-        ffGrid, coloursR, coloursG, coloursB = calculateFFGrid(meshList, numPatches)
+        ffGrid, colours = calculateFFGrid(meshList, numPatches)
         #print(time.perf_counter())
         #print(ffGrid)
         #print(torch.max(ffGrid))
 
-        pickle_out = open("ffGridVertex20BoxesColour.pickle","wb")
-        pickle.dump((ffGrid, coloursR, coloursG, coloursB), pickle_out)
+        pickle_out = open("ffGridVertex10BoxesColourWide.pickle","wb")
+        pickle.dump((ffGrid, colours), pickle_out)
         pickle_out.close()
 
     else:
 
-        pickle_in = open("ffGridVertex20BoxesColour.pickle","rb")
-        ffGrid, coloursR, coloursG, coloursB = pickle.load(pickle_in)
+        pickle_in = open("ffGridVertex10BoxesColourWide.pickle","rb")
+        ffGrid, colours = pickle.load(pickle_in)
         pickle_in.close()
 
     ffGrid = ffGrid.to(device=args.device)
-    modelR = FFNet(ffGrid, coloursR).to(device=args.device)
-    modelG = FFNet(ffGrid, coloursG).to(device=args.device)
-    modelB = FFNet(ffGrid, coloursB).to(device=args.device)
+    model = FFNet(ffGrid, colours).to(device=args.device)
 
     start = time.perf_counter()
-    radR = modelR(x)
-    radG = modelG(x)
-    radB = modelB(x)
+    rad = model(x)
     stop = time.perf_counter()
     print("runtime: " + str(stop - start))
-    radR = torch.squeeze(radR)
-    radG = torch.squeeze(radG)
-    radB = torch.squeeze(radB)
+    rad = torch.squeeze(rad)
     #print(rad)
     #print(rad.size())
 
     width = 512
     height = 512
 
-    data = projectToScreen(meshList, radR, radG, radB, width, height)
+    data = projectToScreen(meshList, rad, width, height)
 
     writePPM(data, width, height, "outputC.ppm")
