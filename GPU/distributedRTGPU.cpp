@@ -569,8 +569,13 @@ int main()
                   cudaMemcpyHostToDevice
                   ) );
 
+      auto start = std::chrono::high_resolution_clock::now();
       OPTIX_CHECK( optixLaunch( pipeline, stream, d_param, sizeof( Params ), &sbt, width, height, 1 ) );
       CUDA_SYNC_CHECK();
+      auto stop = std::chrono::high_resolution_clock::now();
+      auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(stop - start);
+      std::cout << duration.count()/1000000000.0f << std::endl;
+
 
       output_buffer.unmap();
   }
