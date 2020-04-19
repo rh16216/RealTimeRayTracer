@@ -449,24 +449,24 @@ class FFNet(nn.Module):
         bias = torch.zeros_like(self.fc.bias)
         #print(lightCorner)
         #print(wallWidth)
-        bias[3*(lightCorner-1)] = 15.0
-        bias[3*(lightCorner)] = 15.0
-        bias[3*(lightCorner+1)] = 15.0
-        bias[3*(lightCorner+wallWidth-1)] = 15.0
-        bias[3*(lightCorner+wallWidth)] = 15.0
-        bias[3*(lightCorner+wallWidth+1)] = 15.0
-        bias[3*(lightCorner-1)+1] = 15.0
-        bias[3*(lightCorner)+1] = 15.0
-        bias[3*(lightCorner+1)+1] = 15.0
-        bias[3*(lightCorner+wallWidth-1)+1] = 15.0
-        bias[3*(lightCorner+wallWidth)+1] = 15.0
-        bias[3*(lightCorner+wallWidth+1)+1] = 15.0
-        bias[3*(lightCorner-1)+2] = 15.0
-        bias[3*(lightCorner)+2] = 15.0
-        bias[3*(lightCorner+1)+2] = 15.0
-        bias[3*(lightCorner+wallWidth-1)+2] = 15.0
-        bias[3*(lightCorner+wallWidth)+2] = 15.0
-        bias[3*(lightCorner+wallWidth+1)+2] = 15.0
+        bias[3*(lightCorner-1)] = 60.0
+        bias[3*(lightCorner)] = 60.0
+        bias[3*(lightCorner+1)] = 60.0
+        bias[3*(lightCorner+wallWidth-1)] = 60.0
+        bias[3*(lightCorner+wallWidth)] = 60.0
+        bias[3*(lightCorner+wallWidth+1)] = 60.0
+        bias[3*(lightCorner-1)+1] = 60.0
+        bias[3*(lightCorner)+1] = 60.0
+        bias[3*(lightCorner+1)+1] = 60.0
+        bias[3*(lightCorner+wallWidth-1)+1] = 60.0
+        bias[3*(lightCorner+wallWidth)+1] = 60.0
+        bias[3*(lightCorner+wallWidth+1)+1] = 60.0
+        bias[3*(lightCorner-1)+2] = 60.0
+        bias[3*(lightCorner)+2] = 60.0
+        bias[3*(lightCorner+1)+2] = 60.0
+        bias[3*(lightCorner+wallWidth-1)+2] = 60.0
+        bias[3*(lightCorner+wallWidth)+2] = 60.0
+        bias[3*(lightCorner+wallWidth+1)+2] = 60.0
         self.fc.bias = torch.nn.Parameter(bias)
 
 
@@ -479,7 +479,7 @@ class FFNet(nn.Module):
         return x
 
 
-numDivides = 10
+numDivides = 20
 numPatches = 13*(numDivides+1)*(numDivides+1)
 numBounces = 3
 
@@ -532,13 +532,13 @@ with torch.no_grad():
         #print(ffGrid)
         #print(torch.max(ffGrid))
 
-        pickle_out = open("ffGridVertex10BoxesColourWide.pickle","wb")
+        pickle_out = open("ffGridVertex20BoxesColourWide.pickle","wb")
         pickle.dump((ffGrid, colours), pickle_out)
         pickle_out.close()
 
     else:
 
-        pickle_in = open("ffGridVertex10BoxesColourWide.pickle","rb")
+        pickle_in = open("ffGridVertex20BoxesColourWide.pickle","rb")
         ffGrid, colours = pickle.load(pickle_in)
         pickle_in.close()
 
