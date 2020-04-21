@@ -438,7 +438,7 @@ def writePPM(data, width, height, fileName):
 
 
 class FFNet(nn.Module):
-    def __init__(self, ffGrid, colours):
+    def __init__(self, ffGrid, colours, numBounces):
         super(FFNet, self).__init__()
         self.colours = colours
         self.fc = nn.Linear(3*numPatches, 3*numPatches)
@@ -449,39 +449,39 @@ class FFNet(nn.Module):
         bias = torch.zeros_like(self.fc.bias)
         #print(lightCorner)
         #print(wallWidth)
-        bias[3*(lightCorner-1)] = 60.0
-        bias[3*(lightCorner)] = 60.0
-        bias[3*(lightCorner+1)] = 60.0
-        bias[3*(lightCorner+wallWidth-1)] = 60.0
-        bias[3*(lightCorner+wallWidth)] = 60.0
-        bias[3*(lightCorner+wallWidth+1)] = 60.0
-        bias[3*(lightCorner-1)+1] = 60.0
-        bias[3*(lightCorner)+1] = 60.0
-        bias[3*(lightCorner+1)+1] = 60.0
-        bias[3*(lightCorner+wallWidth-1)+1] = 60.0
-        bias[3*(lightCorner+wallWidth)+1] = 60.0
-        bias[3*(lightCorner+wallWidth+1)+1] = 60.0
-        bias[3*(lightCorner-1)+2] = 60.0
-        bias[3*(lightCorner)+2] = 60.0
-        bias[3*(lightCorner+1)+2] = 60.0
-        bias[3*(lightCorner+wallWidth-1)+2] = 60.0
-        bias[3*(lightCorner+wallWidth)+2] = 60.0
-        bias[3*(lightCorner+wallWidth+1)+2] = 60.0
+        sizeRatio = float(args.num_divides)/10.0
+        lightIntensity = 15.0*sizeRatio*sizeRatio
+
+        bias[3*(lightCorner-1)] = lightIntensity
+        bias[3*(lightCorner)] = lightIntensity
+        bias[3*(lightCorner+1)] = lightIntensity
+        bias[3*(lightCorner+wallWidth-1)] = lightIntensity
+        bias[3*(lightCorner+wallWidth)] = lightIntensity
+        bias[3*(lightCorner+wallWidth+1)] = lightIntensity
+        bias[3*(lightCorner-1)+1] = lightIntensity
+        bias[3*(lightCorner)+1] = lightIntensity
+        bias[3*(lightCorner+1)+1] = lightIntensity
+        bias[3*(lightCorner+wallWidth-1)+1] = lightIntensity
+        bias[3*(lightCorner+wallWidth)+1] = lightIntensity
+        bias[3*(lightCorner+wallWidth+1)+1] = lightIntensity
+        bias[3*(lightCorner-1)+2] = lightIntensity
+        bias[3*(lightCorner)+2] = lightIntensity
+        bias[3*(lightCorner+1)+2] = lightIntensity
+        bias[3*(lightCorner+wallWidth-1)+2] = lightIntensity
+        bias[3*(lightCorner+wallWidth)+2] = lightIntensity
+        bias[3*(lightCorner+wallWidth+1)+2] = lightIntensity
         self.fc.bias = torch.nn.Parameter(bias)
 
+        self.numBounces = numBounces
 
     def forward(self, x):
         with torch.no_grad():
-            for bounces in range(0, numBounces):
+            for bounces in range(0, self.numBounces):
                 x = self.fc(x)
                 x = self.colours*x
 
         return x
 
-
-numDivides = 20
-numPatches = 13*(numDivides+1)*(numDivides+1)
-numBounces = 3
 
 parser = argparse.ArgumentParser(description='Parse command line arguments')
 
@@ -489,6 +489,10 @@ parser.add_argument('--disable-cuda', action='store_true',
                     help='Disable CUDA')
 parser.add_argument('--pickle-save', action='store_true',
                     help='Calculate and Store Form Factors')
+
+parser.add_argument('--num-divides', type = int, help='Number of patches per row of mesh')
+parser.add_argument('--num-bounces', type = int, help='Number of iterations used in lighting calculation')
+
 
 args = parser.parse_args()
 args.device = None
@@ -499,30 +503,34 @@ else:
 
 with torch.no_grad():
 
+    numPatches = 13*(args.num_divides+1)*(args.num_divides+1)
+
     # Create Tensor to hold input
-    x = torch.zeros(1, 3*numPatches).to(device=args.device)
+    x = torch.zeros(1, 3*numPatches).to(device=args.device)#.half()
     #print(x)
     #print(torch.sum(x))
 
-    floorMesh     = createBasicMesh(torch.tensor([556.0, 0.0, 559.2]), torch.tensor([0.0, 0.0, -559.2]), torch.tensor([-556.0, 0.0, 0.0]), numDivides)
-    ceilingMesh   = createBasicMesh(torch.tensor([556.0, 548.8, 559.2]), torch.tensor([0.0, 0.0, -559.2]), torch.tensor([-556.0, 0.0, 0.0]), numDivides)
-    backWallMesh  = createBasicMesh(torch.tensor([556.0, 548.8, 559.2]), torch.tensor([0.0, -548.8, 0.0]), torch.tensor([-556.0, 0.0, 0.0]), numDivides)
-    rightWallMesh = createBasicMesh(torch.tensor([0.0, 548.8, 559.2]), torch.tensor([0.0, -548.8, 0.0]), torch.tensor([0.0, 0.0, -559.2]), numDivides)
-    leftWallMesh  = createBasicMesh(torch.tensor([556.0, 548.8, 0.0]), torch.tensor([0.0, -548.8, 0.0]), torch.tensor([0.0, 0.0, 559.2]), numDivides)
+    floorMesh     = createBasicMesh(torch.tensor([556.0, 0.0, 559.2]), torch.tensor([0.0, 0.0, -559.2]), torch.tensor([-556.0, 0.0, 0.0]), args.num_divides)
+    ceilingMesh   = createBasicMesh(torch.tensor([556.0, 548.8, 559.2]), torch.tensor([0.0, 0.0, -559.2]), torch.tensor([-556.0, 0.0, 0.0]), args.num_divides)
+    backWallMesh  = createBasicMesh(torch.tensor([556.0, 548.8, 559.2]), torch.tensor([0.0, -548.8, 0.0]), torch.tensor([-556.0, 0.0, 0.0]), args.num_divides)
+    rightWallMesh = createBasicMesh(torch.tensor([0.0, 548.8, 559.2]), torch.tensor([0.0, -548.8, 0.0]), torch.tensor([0.0, 0.0, -559.2]), args.num_divides)
+    leftWallMesh  = createBasicMesh(torch.tensor([556.0, 548.8, 0.0]), torch.tensor([0.0, -548.8, 0.0]), torch.tensor([0.0, 0.0, 559.2]), args.num_divides)
 
-    shortBlockTop   = createBasicMesh(torch.tensor([242.0, 165.0, 274.0]), torch.tensor([48.0, 0.0, -160.0]), torch.tensor([-160.0, 0.0, -49.0]), numDivides)
-    shortBlockLeft  = createBasicMesh(torch.tensor([240.0, 165.0, 272.0]), torch.tensor([0.0, -165.0, 0.0]), torch.tensor([50.0, 0.0, -158.0]), numDivides)
-    shortBlockRight = createBasicMesh(torch.tensor([130.0, 165.0, 65.0]), torch.tensor([0.0, -165.0, 0.0]), torch.tensor([-48.0, 0.0, 160.0]), numDivides)
-    shortBlockFront = createBasicMesh(torch.tensor([290.0, 165.0, 114.0]), torch.tensor([0.0, -165.0, 0.0]), torch.tensor([-160.0, 0.0, -49.0]), numDivides)
-    #shortBlockBack  = createBasicMesh(torch.tensor([82.0, 165.0, 225.0]), torch.tensor([0.0, -165.0, 0.0]), torch.tensor([158.0, 0.0, 47.0]), numDivides)
+    shortBlockTop   = createBasicMesh(torch.tensor([242.0, 165.0, 274.0]), torch.tensor([48.0, 0.0, -160.0]), torch.tensor([-160.0, 0.0, -49.0]), args.num_divides)
+    shortBlockLeft  = createBasicMesh(torch.tensor([240.0, 165.0, 272.0]), torch.tensor([0.0, -165.0, 0.0]), torch.tensor([50.0, 0.0, -158.0]), args.num_divides)
+    shortBlockRight = createBasicMesh(torch.tensor([130.0, 165.0, 65.0]), torch.tensor([0.0, -165.0, 0.0]), torch.tensor([-48.0, 0.0, 160.0]), args.num_divides)
+    shortBlockFront = createBasicMesh(torch.tensor([290.0, 165.0, 114.0]), torch.tensor([0.0, -165.0, 0.0]), torch.tensor([-160.0, 0.0, -49.0]), args.num_divides)
+    #shortBlockBack  = createBasicMesh(torch.tensor([82.0, 165.0, 225.0]), torch.tensor([0.0, -165.0, 0.0]), torch.tensor([158.0, 0.0, 47.0]), args.num_divides)
 
-    tallBlockTop   = createBasicMesh(torch.tensor([472.0, 330.0, 406.0]), torch.tensor([-49.0, 0.0, -159.0]), torch.tensor([-158.0, 0.0, 49.0]), numDivides)
-    tallBlockLeft  = createBasicMesh(torch.tensor([472.0, 330.0, 406.0]), torch.tensor([0.0, -330.0, 0.0]), torch.tensor([-49.0, 0.0, -159.0]), numDivides)
-    tallBlockRight = createBasicMesh(torch.tensor([265.0, 330.0, 296.0]), torch.tensor([0.0, -330.0, 0.0]), torch.tensor([49.0, 0.0, 160.0]), numDivides)
-    tallBlockFront = createBasicMesh(torch.tensor([423.0, 330.0, 247.0]), torch.tensor([0.0, -330.0, 0.0]), torch.tensor([-158.0, 0.0, 49.0]), numDivides)
-    #tallBlockBack  = createBasicMesh(torch.tensor([314.0, 330.0, 456.0]), torch.tensor([0.0, -330.0, 0.0]), torch.tensor([158.0, 0.0, -50.0]), numDivides)
+    tallBlockTop   = createBasicMesh(torch.tensor([472.0, 330.0, 406.0]), torch.tensor([-49.0, 0.0, -159.0]), torch.tensor([-158.0, 0.0, 49.0]), args.num_divides)
+    tallBlockLeft  = createBasicMesh(torch.tensor([472.0, 330.0, 406.0]), torch.tensor([0.0, -330.0, 0.0]), torch.tensor([-49.0, 0.0, -159.0]), args.num_divides)
+    tallBlockRight = createBasicMesh(torch.tensor([265.0, 330.0, 296.0]), torch.tensor([0.0, -330.0, 0.0]), torch.tensor([49.0, 0.0, 160.0]), args.num_divides)
+    tallBlockFront = createBasicMesh(torch.tensor([423.0, 330.0, 247.0]), torch.tensor([0.0, -330.0, 0.0]), torch.tensor([-158.0, 0.0, 49.0]), args.num_divides)
+    #tallBlockBack  = createBasicMesh(torch.tensor([314.0, 330.0, 456.0]), torch.tensor([0.0, -330.0, 0.0]), torch.tensor([158.0, 0.0, -50.0]), args.num_divides)
 
     meshList = [floorMesh, ceilingMesh, backWallMesh, rightWallMesh, leftWallMesh, tallBlockLeft, tallBlockRight, tallBlockFront, tallBlockTop, shortBlockLeft, shortBlockRight, shortBlockFront, shortBlockTop]
+
+    pickleString = "ffGridVertex" + str(args.num_divides) + "BoxesColourWide.pickle"
 
     if (args.pickle_save):
 
@@ -532,18 +540,21 @@ with torch.no_grad():
         #print(ffGrid)
         #print(torch.max(ffGrid))
 
-        pickle_out = open("ffGridVertex20BoxesColourWide.pickle","wb")
+        pickle_out = open(pickleString,"wb")
         pickle.dump((ffGrid, colours), pickle_out)
         pickle_out.close()
 
     else:
 
-        pickle_in = open("ffGridVertex20BoxesColourWide.pickle","rb")
+        pickle_in = open(pickleString,"rb")
         ffGrid, colours = pickle.load(pickle_in)
         pickle_in.close()
 
-    ffGrid = ffGrid.to(device=args.device)
-    model = FFNet(ffGrid, colours).to(device=args.device)
+    ffGrid = ffGrid.to(device=args.device)#.half()
+    colours = colours.to(device=args.device)#.half()
+    model = FFNet(ffGrid, colours, args.num_bounces).to(device=args.device)#.half()
+
+    model(x) #dummy run to initialise lazy CUDA
 
     start = time.perf_counter()
     rad = model(x)
@@ -558,4 +569,4 @@ with torch.no_grad():
 
     data = projectToScreen(meshList, rad, width, height)
 
-    writePPM(data, width, height, "outputC.ppm")
+    writePPM(data, width, height, "outputCWide.ppm")
