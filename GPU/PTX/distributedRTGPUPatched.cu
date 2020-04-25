@@ -46,7 +46,7 @@ struct RadiancePRD
     float3   attenuation;
     float3   origin;
     float3   direction;
-    //uint32_t seed;
+    uint32_t seed;
     int32_t  countEmitted;
     int32_t  done;
     //int32_t  pad;
@@ -206,10 +206,11 @@ extern "C" __global__ void __raygen__rg()
             ) - 1.0f;
 
     const int depth = 2;
-    const int numSamples = 32;
+    const int numSamples = 512;
     float3 colour = make_float3(0.0f, 0.0f, 0.0f);
 
     RadiancePRD prd;
+    prd.seed         = 0;
 
     for (int sample = 0; sample < numSamples; sample++){
       int iters = 0;
@@ -285,9 +286,10 @@ extern "C" __global__ void __closesthit__ch()
       prd->emitted = make_float3(0.0f, 0.0f, 0.0f);
     }
 
-    const float3 diffuseColour = rt_data->diffuse_color;
+    //const float3 diffuseColour = rt_data->diffuse_color;
 
-    uint32_t seed = tea<4>( prim_idx/2, 0u );
+    uint32_t seed = prd->seed;
+    if (seed == 0) seed = tea<4>( prim_idx/2, 0u );
 
     const float z1 = rnd(seed);
     const float z2 = rnd(seed);
@@ -299,11 +301,12 @@ extern "C" __global__ void __closesthit__ch()
     onb.inverse_transform( w_in );
     prd->direction = w_in;
     prd->origin    = patchCentre;
-    prd->attenuation = prd->attenuation*diffuseColour;
+    prd->attenuation = prd->attenuation;//*diffuseColour;
     prd->countEmitted = false;
 
     const float zz1 = rnd(seed);
     const float zz2 = rnd(seed);
+    prd->seed = seed;
 
     const float3 lightPosSample = params.lightPos + params.lightV1 * zz1 + params.lightV2 * zz2;
 
