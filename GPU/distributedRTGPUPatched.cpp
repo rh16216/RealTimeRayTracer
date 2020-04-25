@@ -1,6 +1,6 @@
 //compile using: g++ -std=c++0x -I$CPATH -I/sw/lang/cuda_10.1.105/NVIDIA-OptiX-SDK-7.0.0-linux64/include -o distributedRTGPUPatched distributedRTGPUPatched.cpp -L/sw/lang/cuda_10.1.105/lib64 -ldl -lutil -lcublas -lcudart
 
-#include "distributedRTGPU.h"
+#include "distributedRTGPUPatched.h"
 
 
 template <typename T>
@@ -148,7 +148,8 @@ int main()
   //Create mesh
   std::vector<Vertex> g_vertices_patched_vec = {};
   std::vector<uint32_t> g_mat_indices_patched_vec = {};
-
+  std::vector<Vertex> g_patch_centres_vec = {};
+  
   for (int triangleIndex = 0; triangleIndex < g_vertices.size()/3; triangleIndex++){
     Vertex vertex0 = g_vertices[3*triangleIndex];
     Vertex vertex1 = g_vertices[3*triangleIndex+1];
@@ -167,11 +168,13 @@ int main()
         float3 patchVertex1f = patchVertex0f + v1;
         float3 patchVertex2f = patchVertex1f + v2;
         float3 patchVertex3f = patchVertex2f - v1;
+        float3 centref       = patchVertex0f + 0.5f*v1 + 0.5*v2;
 
         Vertex patchVertex0 = {patchVertex0f.x, patchVertex0f.y, patchVertex0f.z, 0.0f};
         Vertex patchVertex1 = {patchVertex1f.x, patchVertex1f.y, patchVertex1f.z, 0.0f};
         Vertex patchVertex2 = {patchVertex2f.x, patchVertex2f.y, patchVertex2f.z, 0.0f};
         Vertex patchVertex3 = {patchVertex3f.x, patchVertex3f.y, patchVertex3f.z, 0.0f};
+        Vertex centre       = {centref.x, centref.y, centref.z, 0.0f};
 
 
         g_vertices_patched_vec.push_back(patchVertex0);
@@ -185,6 +188,10 @@ int main()
         g_mat_indices_patched_vec.push_back(g_mat_indices[triangleIndex]);
         g_mat_indices_patched_vec.push_back(g_mat_indices[triangleIndex]);
 
+        g_patch_centres_vec.push_back(centre);
+        g_patch_centres_vec.push_back(centre);
+
+
       }
 
     }
@@ -196,6 +203,9 @@ int main()
 
   std::array<uint32_t, TRIANGLE_COUNT * NUM_DIVIDES * NUM_DIVIDES> g_mat_indices_patched = {};
   std::copy(g_mat_indices_patched_vec.begin(), g_mat_indices_patched_vec.end(), g_mat_indices_patched.begin());
+
+  std::array<Vertex, TRIANGLE_COUNT * NUM_DIVIDES * NUM_DIVIDES> g_patch_centres = {};
+  std::copy(g_patch_centres_vec.begin(), g_patch_centres_vec.end(), g_patch_centres.begin());
 
 
   //
@@ -219,6 +229,16 @@ int main()
               mat_indices_size_in_bytes,
               cudaMemcpyHostToDevice
               ) );
+
+  CUdeviceptr d_centres;
+  const size_t centres_size_in_bytes = g_patch_centres.size() * sizeof( Vertex );
+  CUDA_CHECK( cudaMalloc( reinterpret_cast<void**>( &d_centres ), centres_size_in_bytes ) );
+  CUDA_CHECK( cudaMemcpy(
+              reinterpret_cast<void*>( d_centres ),
+              g_patch_centres.data(), centres_size_in_bytes,
+              cudaMemcpyHostToDevice
+              ) );
+
 
   //
   // Build triangle GAS
@@ -512,6 +532,7 @@ int main()
           hg_sbt[2*i].data.emission_color = g_emission_colors[i];
           hg_sbt[2*i].data.diffuse_color  = g_diffuse_colors[i];
           hg_sbt[2*i].data.vertices       = reinterpret_cast<float4*>( d_vertices );
+          hg_sbt[2*i].data.centres        = reinterpret_cast<float4*>( d_centres );
 
           hg_sbt[2*i+1].data = {};
           OPTIX_CHECK( optixSbtRecordPackHeader( hitgroup_prog_group_shadow, &hg_sbt[2*i + 1] ) );

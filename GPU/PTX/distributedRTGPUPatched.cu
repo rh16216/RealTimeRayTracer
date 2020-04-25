@@ -30,7 +30,7 @@
 
 #include <optix.h>
 
-#include "../distributedRTGPU.h"
+#include "../distributedRTGPUPatched.h"
 
 //#include <sutil/vec_math.h>
 
@@ -46,7 +46,7 @@ struct RadiancePRD
     float3   attenuation;
     float3   origin;
     float3   direction;
-    uint32_t seed;
+    //uint32_t seed;
     int32_t  countEmitted;
     int32_t  done;
     //int32_t  pad;
@@ -205,14 +205,11 @@ extern "C" __global__ void __raygen__rg()
             static_cast<float>( idx.y ) / static_cast<float>( dim.y )
             ) - 1.0f;
 
-    uint32_t seed = tea<4>( idx.y*params.image_width + idx.x, 0u );
-
     const int depth = 2;
     const int numSamples = 32;
     float3 colour = make_float3(0.0f, 0.0f, 0.0f);
 
     RadiancePRD prd;
-    prd.seed         = seed;
 
     for (int sample = 0; sample < numSamples; sample++){
       int iters = 0;
@@ -276,7 +273,8 @@ extern "C" __global__ void __closesthit__ch()
     const float3 N_0  = normalize( cross( v1-v0, v2-v0 ) );
 
     const float3 N    = faceforward( N_0, -ray_dir, N_0 );
-    const float3 P    = optixGetWorldRayOrigin() + optixGetRayTmax()*ray_dir + 0.1f*N;
+    //const float3 P    = optixGetWorldRayOrigin() + optixGetRayTmax()*ray_dir + 0.1f*N;
+    const float3 patchCentre = make_float3( rt_data->centres[prim_idx]);
 
     RadiancePRD* prd = getPRD();
 
@@ -289,7 +287,8 @@ extern "C" __global__ void __closesthit__ch()
 
     const float3 diffuseColour = rt_data->diffuse_color;
 
-    uint32_t seed = prd->seed;
+    uint32_t seed = tea<4>( prim_idx/2, 0u );
+
     const float z1 = rnd(seed);
     const float z2 = rnd(seed);
 
@@ -299,18 +298,17 @@ extern "C" __global__ void __closesthit__ch()
     Onb onb( N );
     onb.inverse_transform( w_in );
     prd->direction = w_in;
-    prd->origin    = P;
+    prd->origin    = patchCentre;
     prd->attenuation = prd->attenuation*diffuseColour;
     prd->countEmitted = false;
 
     const float zz1 = rnd(seed);
     const float zz2 = rnd(seed);
-    prd->seed = seed;
 
     const float3 lightPosSample = params.lightPos + params.lightV1 * zz1 + params.lightV2 * zz2;
 
-    const float  Ldist = length(lightPosSample - P );
-    const float3 Ldir  = normalize(lightPosSample - P );
+    const float  Ldist = length(lightPosSample - patchCentre );
+    const float3 Ldir  = normalize(lightPosSample - patchCentre );
     const float  nDl   = dot( N, Ldir );
     const float  LnDl  = -dot( params.lightNorm, Ldir );
     const float A = length(cross(params.lightV1, params.lightV2));
@@ -320,7 +318,7 @@ extern "C" __global__ void __closesthit__ch()
     {
         const bool occluded = traceShadow(
             params.handle,
-            P,
+            patchCentre,
             Ldir,
             0.01f,         // tmin
             Ldist - 0.01f  // tmax
