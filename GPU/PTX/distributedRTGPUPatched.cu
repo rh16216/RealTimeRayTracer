@@ -26,7 +26,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-// compile using: nvcc --std c++11 -ptx -I/sw/lang/cuda_10.1.105/NVIDIA-OptiX-SDK-7.0.0-linux64/include --use_fast_math distributedRTGPU.cu -o distributedRTGPU.ptx
+// compile using: nvcc --std c++11 -ptx -I/sw/lang/cuda_10.1.105/NVIDIA-OptiX-SDK-7.0.0-linux64/include --use_fast_math distributedRTGPUPatched.cu -o distributedRTGPUPatched.ptx
 
 #include <optix.h>
 
@@ -207,8 +207,8 @@ extern "C" __global__ void __raygen__rg()
 
     uint32_t seed = tea<4>( idx.y*params.image_width + idx.x, 0u );
 
-    const int depth = 4;
-    const int numSamples = 512;
+    const int depth = 2;
+    const int numSamples = 32;
     float3 colour = make_float3(0.0f, 0.0f, 0.0f);
 
     RadiancePRD prd;

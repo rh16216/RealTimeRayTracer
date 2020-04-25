@@ -1,4 +1,4 @@
-//compile using: g++ -std=c++0x -I$CPATH -I/sw/lang/cuda_10.1.105/NVIDIA-OptiX-SDK-7.0.0-linux64/include -o distributedRTGPU distributedRTGPU.cpp -L/sw/lang/cuda_10.1.105/lib64 -ldl -lutil -lcublas -lcudart
+//compile using: g++ -std=c++0x -I$CPATH -I/sw/lang/cuda_10.1.105/NVIDIA-OptiX-SDK-7.0.0-linux64/include -o distributedRTGPUPatched distributedRTGPUPatched.cpp -L/sw/lang/cuda_10.1.105/lib64 -ldl -lutil -lcublas -lcudart
 
 #include "distributedRTGPU.h"
 
@@ -19,157 +19,97 @@ struct Vertex
     float x, y, z, pad;
 };
 
+//typedef struct Vertex Vertex;
 
 const int32_t TRIANGLE_COUNT = 32;
 const int32_t MAT_COUNT      = 4;
+const int32_t NUM_DIVIDES    = 10;
 
-const static std::array<Vertex, TRIANGLE_COUNT* 3> g_vertices =
+const static std::array<Vertex, (TRIANGLE_COUNT/2)* 3> g_vertices =
 {  {
     // Floor  -- white lambert
     {    0.0f,    0.0f,    0.0f, 0.0f },
     {    0.0f,    0.0f,  559.2f, 0.0f },
     {  556.0f,    0.0f,  559.2f, 0.0f },
-    {    0.0f,    0.0f,    0.0f, 0.0f },
-    {  556.0f,    0.0f,  559.2f, 0.0f },
-    {  556.0f,    0.0f,    0.0f, 0.0f },
 
     // Ceiling -- white lambert
     {    0.0f,  548.8f,    0.0f, 0.0f },
     {  556.0f,  548.8f,    0.0f, 0.0f },
     {  556.0f,  548.8f,  559.2f, 0.0f },
 
-    {    0.0f,  548.8f,    0.0f, 0.0f },
-    {  556.0f,  548.8f,  559.2f, 0.0f },
-    {    0.0f,  548.8f,  559.2f, 0.0f },
-
     // Back wall -- white lambert
     {    0.0f,    0.0f,  559.2f, 0.0f },
     {    0.0f,  548.8f,  559.2f, 0.0f },
     {  556.0f,  548.8f,  559.2f, 0.0f },
-
-    {    0.0f,    0.0f,  559.2f, 0.0f },
-    {  556.0f,  548.8f,  559.2f, 0.0f },
-    {  556.0f,    0.0f,  559.2f, 0.0f },
 
     // Right wall -- green lambert
     {    0.0f,    0.0f,    0.0f, 0.0f },
     {    0.0f,  548.8f,    0.0f, 0.0f },
     {    0.0f,  548.8f,  559.2f, 0.0f },
 
-    {    0.0f,    0.0f,    0.0f, 0.0f },
-    {    0.0f,  548.8f,  559.2f, 0.0f },
-    {    0.0f,    0.0f,  559.2f, 0.0f },
-
     // Left wall -- red lambert
     {  556.0f,    0.0f,    0.0f, 0.0f },
     {  556.0f,    0.0f,  559.2f, 0.0f },
     {  556.0f,  548.8f,  559.2f, 0.0f },
-
-    {  556.0f,    0.0f,    0.0f, 0.0f },
-    {  556.0f,  548.8f,  559.2f, 0.0f },
-    {  556.0f,  548.8f,    0.0f, 0.0f },
 
     // Short block -- white lambert
     {  130.0f,  165.0f,   65.0f, 0.0f },
     {   82.0f,  165.0f,  225.0f, 0.0f },
     {  242.0f,  165.0f,  274.0f, 0.0f },
 
-    {  130.0f,  165.0f,   65.0f, 0.0f },
-    {  242.0f,  165.0f,  274.0f, 0.0f },
-    {  290.0f,  165.0f,  114.0f, 0.0f },
-
     {  290.0f,    0.0f,  114.0f, 0.0f },
     {  290.0f,  165.0f,  114.0f, 0.0f },
     {  240.0f,  165.0f,  272.0f, 0.0f },
-
-    {  290.0f,    0.0f,  114.0f, 0.0f },
-    {  240.0f,  165.0f,  272.0f, 0.0f },
-    {  240.0f,    0.0f,  272.0f, 0.0f },
 
     {  130.0f,    0.0f,   65.0f, 0.0f },
     {  130.0f,  165.0f,   65.0f, 0.0f },
     {  290.0f,  165.0f,  114.0f, 0.0f },
 
-    {  130.0f,    0.0f,   65.0f, 0.0f },
-    {  290.0f,  165.0f,  114.0f, 0.0f },
-    {  290.0f,    0.0f,  114.0f, 0.0f },
-
     {   82.0f,    0.0f,  225.0f, 0.0f },
     {   82.0f,  165.0f,  225.0f, 0.0f },
     {  130.0f,  165.0f,   65.0f, 0.0f },
-
-    {   82.0f,    0.0f,  225.0f, 0.0f },
-    {  130.0f,  165.0f,   65.0f, 0.0f },
-    {  130.0f,    0.0f,   65.0f, 0.0f },
 
     {  240.0f,    0.0f,  272.0f, 0.0f },
     {  240.0f,  165.0f,  272.0f, 0.0f },
     {   82.0f,  165.0f,  225.0f, 0.0f },
-
-    {  240.0f,    0.0f,  272.0f, 0.0f },
-    {   82.0f,  165.0f,  225.0f, 0.0f },
-    {   82.0f,    0.0f,  225.0f, 0.0f },
 
     // Tall block -- white lambert
     {  423.0f,  330.0f,  247.0f, 0.0f },
     {  265.0f,  330.0f,  296.0f, 0.0f },
     {  314.0f,  330.0f,  455.0f, 0.0f },
 
-    {  423.0f,  330.0f,  247.0f, 0.0f },
-    {  314.0f,  330.0f,  455.0f, 0.0f },
-    {  472.0f,  330.0f,  406.0f, 0.0f },
-
     {  423.0f,    0.0f,  247.0f, 0.0f },
     {  423.0f,  330.0f,  247.0f, 0.0f },
     {  472.0f,  330.0f,  406.0f, 0.0f },
-
-    {  423.0f,    0.0f,  247.0f, 0.0f },
-    {  472.0f,  330.0f,  406.0f, 0.0f },
-    {  472.0f,    0.0f,  406.0f, 0.0f },
 
     {  472.0f,    0.0f,  406.0f, 0.0f },
     {  472.0f,  330.0f,  406.0f, 0.0f },
     {  314.0f,  330.0f,  456.0f, 0.0f },
 
-    {  472.0f,    0.0f,  406.0f, 0.0f },
-    {  314.0f,  330.0f,  456.0f, 0.0f },
-    {  314.0f,    0.0f,  456.0f, 0.0f },
-
     {  314.0f,    0.0f,  456.0f, 0.0f },
     {  314.0f,  330.0f,  456.0f, 0.0f },
     {  265.0f,  330.0f,  296.0f, 0.0f },
 
-    {  314.0f,    0.0f,  456.0f, 0.0f },
-    {  265.0f,  330.0f,  296.0f, 0.0f },
-    {  265.0f,    0.0f,  296.0f, 0.0f },
-
     {  265.0f,    0.0f,  296.0f, 0.0f },
     {  265.0f,  330.0f,  296.0f, 0.0f },
     {  423.0f,  330.0f,  247.0f, 0.0f },
-
-    {  265.0f,    0.0f,  296.0f, 0.0f },
-    {  423.0f,  330.0f,  247.0f, 0.0f },
-    {  423.0f,    0.0f,  247.0f, 0.0f },
 
     // Ceiling light -- emmissive
     {  343.0f,  548.6f,  227.0f, 0.0f },
     {  213.0f,  548.6f,  227.0f, 0.0f },
     {  213.0f,  548.6f,  332.0f, 0.0f },
 
-    {  343.0f,  548.6f,  227.0f, 0.0f },
-    {  213.0f,  548.6f,  332.0f, 0.0f },
-    {  343.0f,  548.6f,  332.0f, 0.0f }
 } };
 
-static std::array<uint32_t, TRIANGLE_COUNT> g_mat_indices = {{
-    0, 0,                          // Floor         -- white lambert
-    0, 0,                          // Ceiling       -- white lambert
-    0, 0,                          // Back wall     -- white lambert
-    1, 1,                          // Right wall    -- green lambert
-    2, 2,                          // Left wall     -- red lambert
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // Short block   -- white lambert
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // Tall block    -- white lambert
-    3, 3                           // Ceiling light -- emmissive
+static std::array<uint32_t, TRIANGLE_COUNT/2> g_mat_indices = {{
+    0,                          // Floor         -- white lambert
+    0,                          // Ceiling       -- white lambert
+    0,                          // Back wall     -- white lambert
+    1,                          // Right wall    -- green lambert
+    2,                          // Left wall     -- red lambert
+    0, 0, 0, 0, 0,              // Short block   -- white lambert
+    0, 0, 0, 0, 0,              // Tall block    -- white lambert
+    3,                          // Ceiling light -- emmissive
 }};
 
 
@@ -205,24 +145,77 @@ int main()
   OPTIX_CHECK( optixInit() );
   OPTIX_CHECK(optixDeviceContextCreate(cuCtx, 0, &context));
 
+  //Create mesh
+  std::vector<Vertex> g_vertices_patched_vec = {};
+  std::vector<uint32_t> g_mat_indices_patched_vec = {};
+
+  for (int triangleIndex = 0; triangleIndex < g_vertices.size()/3; triangleIndex++){
+    Vertex vertex0 = g_vertices[3*triangleIndex];
+    Vertex vertex1 = g_vertices[3*triangleIndex+1];
+    Vertex vertex2 = g_vertices[3*triangleIndex+2];
+
+    float3 corner = make_float3(vertex0.x, vertex0.y, vertex0.z);
+    float3 vertex1f = make_float3(vertex1.x, vertex1.y, vertex1.z);
+    float3 vertex2f = make_float3(vertex2.x, vertex2.y, vertex2.z);
+
+    float3 v1 = (vertex1f - corner)/NUM_DIVIDES;
+    float3 v2 = (vertex2f - vertex1f)/NUM_DIVIDES;
+
+    for (int i = 0; i < NUM_DIVIDES; i++){
+      for (int j = 0; j < NUM_DIVIDES; j++){
+        float3 patchVertex0f = corner + i*v1 + j*v2;
+        float3 patchVertex1f = patchVertex0f + v1;
+        float3 patchVertex2f = patchVertex1f + v2;
+        float3 patchVertex3f = patchVertex2f - v1;
+
+        Vertex patchVertex0 = {patchVertex0f.x, patchVertex0f.y, patchVertex0f.z, 0.0f};
+        Vertex patchVertex1 = {patchVertex1f.x, patchVertex1f.y, patchVertex1f.z, 0.0f};
+        Vertex patchVertex2 = {patchVertex2f.x, patchVertex2f.y, patchVertex2f.z, 0.0f};
+        Vertex patchVertex3 = {patchVertex3f.x, patchVertex3f.y, patchVertex3f.z, 0.0f};
+
+
+        g_vertices_patched_vec.push_back(patchVertex0);
+        g_vertices_patched_vec.push_back(patchVertex1);
+        g_vertices_patched_vec.push_back(patchVertex2);
+
+        g_vertices_patched_vec.push_back(patchVertex0);
+        g_vertices_patched_vec.push_back(patchVertex3);
+        g_vertices_patched_vec.push_back(patchVertex2);
+
+        g_mat_indices_patched_vec.push_back(g_mat_indices[triangleIndex]);
+        g_mat_indices_patched_vec.push_back(g_mat_indices[triangleIndex]);
+
+      }
+
+    }
+
+  }
+
+  std::array<Vertex, TRIANGLE_COUNT * 3 * NUM_DIVIDES * NUM_DIVIDES> g_vertices_patched = {};
+  std::copy(g_vertices_patched_vec.begin(), g_vertices_patched_vec.end(), g_vertices_patched.begin());
+
+  std::array<uint32_t, TRIANGLE_COUNT * NUM_DIVIDES * NUM_DIVIDES> g_mat_indices_patched = {};
+  std::copy(g_mat_indices_patched_vec.begin(), g_mat_indices_patched_vec.end(), g_mat_indices_patched.begin());
+
+
   //
   // copy mesh data to device
   //
   CUdeviceptr d_vertices;
-  const size_t vertices_size_in_bytes = g_vertices.size() * sizeof( Vertex );
+  const size_t vertices_size_in_bytes = g_vertices_patched.size() * sizeof( Vertex );
   CUDA_CHECK( cudaMalloc( reinterpret_cast<void**>( &d_vertices ), vertices_size_in_bytes ) );
   CUDA_CHECK( cudaMemcpy(
               reinterpret_cast<void*>( d_vertices ),
-              g_vertices.data(), vertices_size_in_bytes,
+              g_vertices_patched.data(), vertices_size_in_bytes,
               cudaMemcpyHostToDevice
               ) );
 
   CUdeviceptr  d_mat_indices;
-  const size_t mat_indices_size_in_bytes = g_mat_indices.size() * sizeof( uint32_t );
+  const size_t mat_indices_size_in_bytes = g_mat_indices_patched.size() * sizeof( uint32_t );
   CUDA_CHECK( cudaMalloc( reinterpret_cast<void**>( &d_mat_indices ), mat_indices_size_in_bytes ) );
   CUDA_CHECK( cudaMemcpy(
               reinterpret_cast<void*>( d_mat_indices ),
-              g_mat_indices.data(),
+              g_mat_indices_patched.data(),
               mat_indices_size_in_bytes,
               cudaMemcpyHostToDevice
               ) );
@@ -242,7 +235,7 @@ int main()
   triangle_input.type                                      = OPTIX_BUILD_INPUT_TYPE_TRIANGLES;
   triangle_input.triangleArray.vertexFormat                = OPTIX_VERTEX_FORMAT_FLOAT3;
   triangle_input.triangleArray.vertexStrideInBytes         = sizeof( Vertex );
-  triangle_input.triangleArray.numVertices                 = static_cast<uint32_t>( g_vertices.size() );
+  triangle_input.triangleArray.numVertices                 = static_cast<uint32_t>( g_vertices_patched.size() );
   triangle_input.triangleArray.vertexBuffers               = &d_vertices;
   triangle_input.triangleArray.flags                       = triangle_input_flags;
   triangle_input.triangleArray.numSbtRecords               = MAT_COUNT;
@@ -337,7 +330,7 @@ int main()
       pipeline_compile_options.pipelineLaunchParamsVariableName = "params";
 
       //nvcc -ptx -Ipath-to-optix-sdk/include --use_fast_math myprogram.cu -o myprogram.ptx
-      const std::string ptx = getPtxString( "PTX", "distributedRTGPU", nullptr );
+      const std::string ptx = getPtxString( "PTX", "distributedRTGPUPatched", nullptr );
       size_t sizeof_log = sizeof( log );
 
       OPTIX_CHECK_LOG( optixModuleCreateFromPTX(

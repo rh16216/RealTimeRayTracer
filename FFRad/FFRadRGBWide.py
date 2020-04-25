@@ -506,7 +506,7 @@ with torch.no_grad():
     numPatches = 13*(args.num_divides+1)*(args.num_divides+1)
 
     # Create Tensor to hold input
-    x = torch.zeros(1, 3*numPatches).to(device=args.device)#.half()
+    x = torch.zeros(1, 3*numPatches).to(device=args.device).half()
     #print(x)
     #print(torch.sum(x))
 
@@ -550,9 +550,9 @@ with torch.no_grad():
         ffGrid, colours = pickle.load(pickle_in)
         pickle_in.close()
 
-    ffGrid = ffGrid.to(device=args.device)#.half()
-    colours = colours.to(device=args.device)#.half()
-    model = FFNet(ffGrid, colours, args.num_bounces).to(device=args.device)#.half()
+    ffGrid = ffGrid.to(device=args.device).half()
+    colours = colours.to(device=args.device).half()
+    model = FFNet(ffGrid, colours, args.num_bounces).to(device=args.device).half()
 
     model(x) #dummy run to initialise lazy CUDA
 
