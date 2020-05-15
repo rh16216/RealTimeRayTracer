@@ -29,10 +29,14 @@ def compareImages(image1, image2):
         width = image1.size()[0]
         height = image1.size()[1]
 
+        diffSum = torch.tensor([0.0, 0.0, 0.0])
         diffData = torch.zeros(width, height, 3)
         for i in range(0, height):
             for j in range(0, width):
                 diffData[i][j] = torch.abs(image1[i][j] - image2[i][j])
+                diffSum = diffSum + torch.abs(image1[i][j] - image2[i][j])
+
+        print(diffSum)
 
     return diffData
 
@@ -61,8 +65,8 @@ def writePPM(data, fileName):
 
 
 
-image1 = parsePPM("10patches.ppm")
-image2 = parsePPM("10blocks.ppm")
+image1 = parsePPM("10patchesNoInterp.ppm")
+image2 = parsePPM("4096samples10patches.ppm")
 
 diff = compareImages(image1, image2)
 

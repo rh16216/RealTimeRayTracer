@@ -149,7 +149,7 @@ int main()
   std::vector<Vertex> g_vertices_patched_vec = {};
   std::vector<uint32_t> g_mat_indices_patched_vec = {};
   std::vector<Vertex> g_patch_centres_vec = {};
-  
+
   for (int triangleIndex = 0; triangleIndex < g_vertices.size()/3; triangleIndex++){
     Vertex vertex0 = g_vertices[3*triangleIndex];
     Vertex vertex1 = g_vertices[3*triangleIndex+1];
@@ -568,7 +568,7 @@ int main()
       params.image_width = width;
       params.handle = gas_handle;
       //params.lightIntensity = make_float3( 750000.0f, 750000.0f, 250000.0f ); //point
-      params.lightIntensity = make_float3( 15.0f, 15.0f, 5.0f ); //area
+      params.lightIntensity = make_float3( 10.0f, 10.0f, 10.0f ); //area
       params.lightPos       = make_float3( 343.0f, 548.5f, 227.0f ); //area
       params.lightV1        = make_float3( 0.0f, 0.0f, 105.0f );
       params.lightV2        = make_float3( -130.0f, 0.0f, 0.0f );
